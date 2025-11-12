@@ -17,10 +17,14 @@
  */
 
 #include <sys/types.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 
 #include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -223,26 +227,135 @@ mcp_add_server(struct mcp_client *client, struct mcp_server_config *config)
 	/* Create connection structure */
 	conn = xcalloc(1, sizeof *conn);
 	conn->config = config;
-	conn->socket_fd = -1;
 	conn->state = MCP_DISCONNECTED;
 	conn->request_id = 1;
+
+	/* Initialize transport-specific fields */
+	conn->socket_fd = -1;
+	conn->server_pid = -1;
+	conn->stdin_fd = -1;
+	conn->stdout_fd = -1;
+	conn->read_buffer = NULL;
+	conn->read_buffer_len = 0;
+	conn->read_buffer_size = 0;
 
 	client->connections[client->num_connections++] = conn;
 
 	return (0);
 }
 
-/* Connect to MCP server */
+/* Connect via stdio transport (spawn process) */
 int
-mcp_connect_server(struct mcp_client *client, const char *server_name)
+mcp_connect_stdio(struct mcp_connection *conn)
 {
-	struct mcp_connection	*conn;
+	int	stdin_pipe[2], stdout_pipe[2];
+	pid_t	pid;
+	int	flags;
+
+	if (conn == NULL || conn->config == NULL)
+		return (-1);
+
+	if (conn->config->command == NULL)
+		return (-1);
+
+	/* Already connected */
+	if (conn->state == MCP_CONNECTED && conn->server_pid > 0)
+		return (0);
+
+	/* Create pipes for stdin/stdout */
+	if (pipe(stdin_pipe) < 0)
+		return (-1);
+
+	if (pipe(stdout_pipe) < 0) {
+		close(stdin_pipe[0]);
+		close(stdin_pipe[1]);
+		return (-1);
+	}
+
+	/* Fork to spawn server process */
+	conn->state = MCP_CONNECTING;
+	pid = fork();
+
+	if (pid < 0) {
+		/* Fork failed */
+		close(stdin_pipe[0]);
+		close(stdin_pipe[1]);
+		close(stdout_pipe[0]);
+		close(stdout_pipe[1]);
+		conn->state = MCP_ERROR;
+		conn->errors++;
+		return (-1);
+	}
+
+	if (pid == 0) {
+		/* Child process: exec server */
+
+		/* Redirect stdin from pipe */
+		dup2(stdin_pipe[0], STDIN_FILENO);
+		close(stdin_pipe[0]);
+		close(stdin_pipe[1]);
+
+		/* Redirect stdout to pipe */
+		dup2(stdout_pipe[1], STDOUT_FILENO);
+		close(stdout_pipe[0]);
+		close(stdout_pipe[1]);
+
+		/* Redirect stderr to /dev/null */
+		{
+			int devnull = open("/dev/null", O_WRONLY);
+			if (devnull >= 0) {
+				dup2(devnull, STDERR_FILENO);
+				close(devnull);
+			}
+		}
+
+		/* Execute server command */
+		if (conn->config->args != NULL)
+			execv(conn->config->command, conn->config->args);
+		else
+			execl(conn->config->command, conn->config->command,
+			    (char *)NULL);
+
+		/* If exec fails, exit */
+		_exit(1);
+	}
+
+	/* Parent process: setup connection */
+	close(stdin_pipe[0]);   /* Close read end of stdin pipe */
+	close(stdout_pipe[1]);  /* Close write end of stdout pipe */
+
+	conn->stdin_fd = stdin_pipe[1];   /* Write to server's stdin */
+	conn->stdout_fd = stdout_pipe[0]; /* Read from server's stdout */
+	conn->server_pid = pid;
+
+	/* Set stdout to non-blocking */
+	flags = fcntl(conn->stdout_fd, F_GETFL, 0);
+	if (flags >= 0)
+		fcntl(conn->stdout_fd, F_SETFL, flags | O_NONBLOCK);
+
+	/* Initialize read buffer */
+	conn->read_buffer_size = 4096;
+	conn->read_buffer = xmalloc(conn->read_buffer_size);
+	conn->read_buffer_len = 0;
+
+	conn->state = MCP_CONNECTED;
+	conn->connected_at = time(NULL);
+	conn->last_activity = time(NULL);
+
+	return (0);
+}
+
+/* Connect via socket transport */
+int
+mcp_connect_socket(struct mcp_connection *conn)
+{
 	struct sockaddr_un	 addr;
 	int			 sock_fd;
 
-	/* Find connection by name */
-	conn = mcp_find_connection(client, server_name);
-	if (conn == NULL)
+	if (conn == NULL || conn->config == NULL)
+		return (-1);
+
+	if (conn->config->socket_path == NULL)
 		return (-1);
 
 	/* Already connected */
@@ -253,6 +366,7 @@ mcp_connect_server(struct mcp_client *client, const char *server_name)
 	sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (sock_fd < 0) {
 		conn->state = MCP_ERROR;
+		conn->errors++;
 		return (-1);
 	}
 
@@ -280,6 +394,28 @@ mcp_connect_server(struct mcp_client *client, const char *server_name)
 	return (0);
 }
 
+/* Connect to MCP server (dispatches to socket or stdio) */
+int
+mcp_connect_server(struct mcp_client *client, const char *server_name)
+{
+	struct mcp_connection	*conn;
+
+	/* Find connection by name */
+	conn = mcp_find_connection(client, server_name);
+	if (conn == NULL)
+		return (-1);
+
+	/* Already connected */
+	if (conn->state == MCP_CONNECTED)
+		return (0);
+
+	/* Dispatch to appropriate transport */
+	if (conn->config->transport == MCP_TRANSPORT_STDIO)
+		return mcp_connect_stdio(conn);
+	else
+		return mcp_connect_socket(conn);
+}
+
 /* Disconnect from MCP server */
 void
 mcp_disconnect_server(struct mcp_client *client, const char *server_name)
@@ -290,9 +426,34 @@ mcp_disconnect_server(struct mcp_client *client, const char *server_name)
 	if (conn == NULL)
 		return;
 
+	/* Clean up socket transport */
 	if (conn->socket_fd >= 0) {
 		close(conn->socket_fd);
 		conn->socket_fd = -1;
+	}
+
+	/* Clean up stdio transport */
+	if (conn->stdin_fd >= 0) {
+		close(conn->stdin_fd);
+		conn->stdin_fd = -1;
+	}
+
+	if (conn->stdout_fd >= 0) {
+		close(conn->stdout_fd);
+		conn->stdout_fd = -1;
+	}
+
+	if (conn->server_pid > 0) {
+		kill(conn->server_pid, SIGTERM);
+		waitpid(conn->server_pid, NULL, WNOHANG);
+		conn->server_pid = -1;
+	}
+
+	if (conn->read_buffer != NULL) {
+		free(conn->read_buffer);
+		conn->read_buffer = NULL;
+		conn->read_buffer_len = 0;
+		conn->read_buffer_size = 0;
 	}
 
 	conn->state = MCP_DISCONNECTED;
@@ -314,6 +475,110 @@ mcp_find_connection(struct mcp_client *client, const char *server_name)
 	}
 
 	return (NULL);
+}
+
+/* Send data via appropriate transport */
+static ssize_t
+mcp_send(struct mcp_connection *conn, const char *data, size_t len)
+{
+	ssize_t	n;
+
+	if (conn->config->transport == MCP_TRANSPORT_STDIO) {
+		/* Stdio: write to stdin, add newline for JSON-RPC */
+		n = write(conn->stdin_fd, data, len);
+		if (n > 0)
+			write(conn->stdin_fd, "\n", 1);
+		return (n);
+	} else {
+		/* Socket: direct write */
+		return write(conn->socket_fd, data, len);
+	}
+}
+
+/* Receive data via appropriate transport */
+static ssize_t
+mcp_recv(struct mcp_connection *conn, char *buffer, size_t size)
+{
+	ssize_t		n;
+	char		*newline;
+	fd_set		readfds;
+	struct timeval	timeout;
+	int		ret;
+
+	if (conn->config->transport == MCP_TRANSPORT_STDIO) {
+		/* Stdio: read until we have a complete JSON-RPC response */
+		while (1) {
+			/* Read more data if buffer has space */
+			if (conn->read_buffer_len < conn->read_buffer_size - 1) {
+				/* Use select() to wait for data with timeout */
+				FD_ZERO(&readfds);
+				FD_SET(conn->stdout_fd, &readfds);
+				timeout.tv_sec = MCP_SOCKET_TIMEOUT / 1000;
+				timeout.tv_usec = (MCP_SOCKET_TIMEOUT % 1000) * 1000;
+
+				ret = select(conn->stdout_fd + 1, &readfds, NULL, NULL,
+				    &timeout);
+				if (ret < 0) {
+					/* select error */
+					return (-1);
+				} else if (ret == 0) {
+					/* Timeout - no data available */
+					if (conn->read_buffer_len == 0)
+						return (-1);
+					break;
+				}
+
+				/* Data is available, read it */
+				n = read(conn->stdout_fd,
+				    conn->read_buffer + conn->read_buffer_len,
+				    conn->read_buffer_size - conn->read_buffer_len - 1);
+
+				if (n > 0) {
+					conn->read_buffer_len += n;
+					conn->read_buffer[conn->read_buffer_len] = '\0';
+				} else if (n == 0) {
+					/* EOF */
+					break;
+				} else if (errno != EAGAIN && errno != EWOULDBLOCK) {
+					/* Error */
+					return (-1);
+				}
+			}
+
+			/* Look for complete JSON-RPC response (ends with newline) */
+			newline = strchr(conn->read_buffer, '\n');
+			if (newline != NULL) {
+				/* Found complete response */
+				*newline = '\0';
+				n = newline - conn->read_buffer;
+
+				/* Copy to output buffer */
+				if ((size_t)n >= size)
+					n = size - 1;
+				memcpy(buffer, conn->read_buffer, n);
+				buffer[n] = '\0';
+
+				/* Remove from read buffer */
+				conn->read_buffer_len -= (newline - conn->read_buffer + 1);
+				if (conn->read_buffer_len > 0) {
+					memmove(conn->read_buffer, newline + 1,
+					    conn->read_buffer_len);
+				}
+				conn->read_buffer[conn->read_buffer_len] = '\0';
+
+				return (n);
+			}
+
+			/* Need more data - try again */
+			if (n <= 0)
+				break;
+		}
+
+		return (-1);
+	} else {
+		/* Socket: direct read */
+		return read(conn->socket_fd, buffer, size - 1);
+	}
 }
 
 /* Call MCP tool */
@@ -361,7 +626,7 @@ mcp_call_tool(struct mcp_client *client, const char *server_name,
 	free(method);
 
 	/* Send request */
-	n = write(conn->socket_fd, request, strlen(request));
+	n = mcp_send(conn, request, strlen(request));
 	free(request);
 
 	if (n < 0) {
@@ -375,7 +640,7 @@ mcp_call_tool(struct mcp_client *client, const char *server_name,
 
 	/* Read response */
 	memset(buffer, 0, sizeof buffer);
-	n = read(conn->socket_fd, buffer, sizeof buffer - 1);
+	n = mcp_recv(conn, buffer, sizeof buffer);
 	if (n < 0) {
 		conn->errors++;
 		conn->state = MCP_ERROR;
@@ -415,11 +680,12 @@ mcp_list_tools(struct mcp_client *client, const char *server_name)
 	request = mcp_build_request(conn->request_id++, "tools/list", NULL);
 
 	/* Send request */
-	n = write(conn->socket_fd, request, strlen(request));
+	n = mcp_send(conn, request, strlen(request));
 	free(request);
 
 	if (n < 0) {
 		conn->errors++;
+		conn->state = MCP_ERROR;
 		return (NULL);
 	}
 
@@ -428,9 +694,10 @@ mcp_list_tools(struct mcp_client *client, const char *server_name)
 
 	/* Read response */
 	memset(buffer, 0, sizeof buffer);
-	n = read(conn->socket_fd, buffer, sizeof buffer - 1);
+	n = mcp_recv(conn, buffer, sizeof buffer);
 	if (n < 0) {
 		conn->errors++;
+		conn->state = MCP_ERROR;
 		return (NULL);
 	}
 

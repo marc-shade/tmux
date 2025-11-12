@@ -28,6 +28,12 @@
 #define MCP_MAX_MESSAGE_SIZE 65536
 #define MCP_SOCKET_TIMEOUT 5000  /* 5 seconds */
 
+/* MCP transport type */
+enum mcp_transport {
+	MCP_TRANSPORT_SOCKET,		/* Unix socket */
+	MCP_TRANSPORT_STDIO		/* stdin/stdout (spawned process) */
+};
+
 /* MCP connection state */
 enum mcp_state {
 	MCP_DISCONNECTED,
@@ -39,20 +45,36 @@ enum mcp_state {
 /* MCP server configuration */
 struct mcp_server_config {
 	char	*name;			/* Server name (e.g., "enhanced-memory") */
+	enum mcp_transport transport;	/* Transport type */
+
+	/* Socket transport */
 	char	*socket_path;		/* Unix socket path */
-	char	*command;		/* Command to start server (optional) */
-	char	**args;			/* Command arguments (optional) */
+
+	/* Stdio transport */
+	char	*command;		/* Command to start server */
+	char	**args;			/* Command arguments */
+
 	int	auto_start;		/* Auto-start if not running */
 };
 
 /* Active MCP connection */
 struct mcp_connection {
 	struct mcp_server_config *config;
-	int	socket_fd;
 	enum mcp_state state;
 	time_t	connected_at;
 	time_t	last_activity;
 	int	request_id;		/* JSON-RPC request counter */
+
+	/* Socket transport */
+	int	socket_fd;
+
+	/* Stdio transport */
+	pid_t	server_pid;		/* Spawned server process ID */
+	int	stdin_fd;		/* Write to server stdin */
+	int	stdout_fd;		/* Read from server stdout */
+	char	*read_buffer;		/* Buffer for reading responses */
+	size_t	read_buffer_len;	/* Current buffer length */
+	size_t	read_buffer_size;	/* Allocated buffer size */
 
 	/* Statistics */
 	u_int	requests_sent;
@@ -86,6 +108,8 @@ int			mcp_client_init(struct mcp_client *);
 /* Server management */
 int			mcp_add_server(struct mcp_client *, struct mcp_server_config *);
 int			mcp_connect_server(struct mcp_client *, const char *);
+int			mcp_connect_socket(struct mcp_connection *);
+int			mcp_connect_stdio(struct mcp_connection *);
 void			mcp_disconnect_server(struct mcp_client *, const char *);
 struct mcp_connection	*mcp_find_connection(struct mcp_client *, const char *);
 
