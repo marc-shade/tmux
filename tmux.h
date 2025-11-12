@@ -35,6 +35,7 @@
 #include "compat.h"
 #include "tmux-protocol.h"
 #include "xmalloc.h"
+#include "agent-metadata.h"
 
 extern char   **environ;
 
@@ -1248,6 +1249,9 @@ struct window_pane {
 	int		 control_fg;
 
 	struct style	 scrollbar_style;
+
+	/* Agentic system metadata */
+	struct agent_metadata *agent_meta;
 
 	TAILQ_ENTRY(window_pane) entry;  /* link in list of all panes */
 	TAILQ_ENTRY(window_pane) sentry; /* link in list of last visited */

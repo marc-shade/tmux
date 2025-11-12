@@ -73,6 +73,7 @@ endif
 
 # List of sources.
 dist_tmux_SOURCES = \
+	agent-manager.c \
 	alerts.c \
 	arguments.c \
 	attributes.c \
