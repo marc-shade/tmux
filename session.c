@@ -154,6 +154,9 @@ session_create(const char *prefix, const char *name, const char *cwd,
 		fatal("gettimeofday failed");
 	session_update_activity(s, &s->creation_time);
 
+	/* Initialize agent metadata to NULL */
+	s->agent_metadata = NULL;
+
 	return (s);
 }
 
@@ -187,6 +190,10 @@ session_free(__unused int fd, __unused short events, void *arg)
 	if (s->references == 0) {
 		environ_free(s->environ);
 		options_free(s->options);
+
+		/* Defensive cleanup of agent metadata */
+		if (s->agent_metadata != NULL)
+			session_agent_destroy(s->agent_metadata);
 
 		free(s->name);
 		free(s);
@@ -225,6 +232,13 @@ session_destroy(struct session *s, int notify, const char *from)
 	}
 
 	free((void *)s->cwd);
+
+	/* Destroy agent metadata if present */
+	if (s->agent_metadata != NULL) {
+		session_agent_complete(s->agent_metadata);
+		session_agent_destroy(s->agent_metadata);
+		s->agent_metadata = NULL;
+	}
 
 	session_remove_ref(s, __func__);
 }

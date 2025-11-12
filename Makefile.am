@@ -76,6 +76,7 @@ dist_tmux_SOURCES = \
 	agent-manager.c \
 	mcp-client.c \
 	mcp-config.c \
+	session-agent.c \
 	alerts.c \
 	arguments.c \
 	attributes.c \

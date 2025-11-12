@@ -38,6 +38,7 @@
 #include "agent-metadata.h"
 #include "mcp-client.h"
 #include "mcp-config.h"
+#include "session-agent.h"
 
 extern char   **environ;
 
@@ -1445,6 +1446,8 @@ struct session {
 	struct termios	*tio;
 
 	struct environ	*environ;
+
+	struct session_agent *agent_metadata;
 
 	int		 references;
 
