@@ -78,6 +78,16 @@ cmd_detach_client_exec(struct cmd *self, struct cmdq_item *item)
 		s = source->s;
 		if (s == NULL)
 			return (CMD_RETURN_NORMAL);
+
+		/* Save session context if agent metadata exists */
+		if (s->agent_metadata != NULL) {
+			char context[256];
+			snprintf(context, sizeof context,
+			    "Session %s detached at %ld",
+			    s->name, (long)time(NULL));
+			session_agent_save_context(s->agent_metadata, context);
+		}
+
 		TAILQ_FOREACH(loop, &clients, entry) {
 			if (loop->session == s) {
 				if (cmd != NULL)
@@ -99,6 +109,15 @@ cmd_detach_client_exec(struct cmd *self, struct cmdq_item *item)
 			}
 		}
 		return (CMD_RETURN_NORMAL);
+	}
+
+	/* Save session context if agent metadata exists */
+	if (tc->session != NULL && tc->session->agent_metadata != NULL) {
+		char context[256];
+		snprintf(context, sizeof context,
+		    "Session %s detached at %ld",
+		    tc->session->name, (long)time(NULL));
+		session_agent_save_context(tc->session->agent_metadata, context);
 	}
 
 	if (cmd != NULL)

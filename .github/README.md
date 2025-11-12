@@ -1,8 +1,19 @@
-# Welcome to tmux!
+# Welcome to tmux with Agentic Features!
+
+This is a fork of tmux that adds **native Model Context Protocol (MCP) integration** and **agentic AI workflow support**.
 
 tmux is a terminal multiplexer: it enables a number of terminals to be created,
 accessed, and controlled from a single screen. tmux may be detached from a
 screen and continue running in the background, then later reattached.
+
+## 🚀 New Agentic Features
+
+- **Agent-Aware Sessions** - Track purpose, goals, and progress
+- **Native MCP Integration** - Query MCP servers directly from tmux
+- **Session Persistence** - Auto-save/restore with agent context
+- **Progress Tracking** - Monitor tasks, interactions, and metrics
+
+👉 **[Read the complete Agentic Features Guide](../AGENTIC_FEATURES.md)**
 
 This release runs on OpenBSD, FreeBSD, NetBSD, Linux, macOS and Solaris.
 

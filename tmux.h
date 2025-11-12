@@ -35,6 +35,10 @@
 #include "compat.h"
 #include "tmux-protocol.h"
 #include "xmalloc.h"
+#include "agent-metadata.h"
+#include "mcp-client.h"
+#include "mcp-config.h"
+#include "session-agent.h"
 
 extern char   **environ;
 
@@ -1249,6 +1253,9 @@ struct window_pane {
 
 	struct style	 scrollbar_style;
 
+	/* Agentic system metadata */
+	struct agent_metadata *agent_meta;
+
 	TAILQ_ENTRY(window_pane) entry;  /* link in list of all panes */
 	TAILQ_ENTRY(window_pane) sentry; /* link in list of last visited */
 	RB_ENTRY(window_pane) tree_entry;
@@ -1439,6 +1446,8 @@ struct session {
 	struct termios	*tio;
 
 	struct environ	*environ;
+
+	struct session_agent *agent_metadata;
 
 	int		 references;
 
@@ -2259,6 +2268,7 @@ extern struct options	*global_w_options;
 extern struct environ	*global_environ;
 extern struct timeval	 start_time;
 extern const char	*socket_path;
+extern struct mcp_client *global_mcp_client;
 extern const char	*shell_command;
 extern int		 ptm_fd;
 extern const char	*shell_command;

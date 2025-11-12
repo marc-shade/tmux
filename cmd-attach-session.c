@@ -126,6 +126,12 @@ cmd_attach_session(struct cmdq_item *item, const char *tflag, int dflag,
 			environ_update(s->options, c->environ, s->environ);
 
 		server_client_set_session(c, s);
+
+		/* Restore session context if agent metadata exists */
+		if (s->agent_metadata != NULL && s->agent_metadata->context_key != NULL) {
+			session_agent_restore_context(s->agent_metadata);
+		}
+
 		if (~cmdq_get_flags(item) & CMDQ_STATE_REPEAT)
 			server_client_set_key_table(c, NULL);
 	} else {
