@@ -37,6 +37,7 @@
 #include "xmalloc.h"
 #include "agent-metadata.h"
 #include "mcp-client.h"
+#include "mcp-config.h"
 
 extern char   **environ;
 

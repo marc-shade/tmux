@@ -60,7 +60,7 @@ cmd_mcp_query_exec(struct cmd *self, struct cmdq_item *item)
 
 	/* Ensure global MCP client exists */
 	if (global_mcp_client == NULL) {
-		struct mcp_server_config	*test_config;
+		int	servers_loaded;
 
 		global_mcp_client = mcp_client_create();
 		if (global_mcp_client == NULL) {
@@ -69,19 +69,12 @@ cmd_mcp_query_exec(struct cmd *self, struct cmdq_item *item)
 		}
 		mcp_client_init(global_mcp_client);
 
-		/* Add test stdio server for testing */
-		test_config = xmalloc(sizeof *test_config);
-		test_config->name = xstrdup("test-stdio");
-		test_config->transport = MCP_TRANSPORT_STDIO;
-		test_config->socket_path = NULL;
-		test_config->command = xstrdup("/usr/bin/python3");
-		test_config->args = xmalloc(3 * sizeof(char *));
-		test_config->args[0] = xstrdup("/usr/bin/python3");
-		test_config->args[1] = xstrdup("/tmp/test-mcp-stdio-server.py");
-		test_config->args[2] = NULL;
-		test_config->auto_start = 1;
-
-		mcp_add_server(global_mcp_client, test_config);
+		/* Load MCP servers from ~/.claude.json */
+		servers_loaded = mcp_load_config(global_mcp_client);
+		if (servers_loaded < 0) {
+			cmdq_error(item, "failed to load MCP configuration");
+			/* Continue anyway - user may add servers manually */
+		}
 	}
 
 	/* Call the tool */

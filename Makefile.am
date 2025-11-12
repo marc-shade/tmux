@@ -75,6 +75,7 @@ endif
 dist_tmux_SOURCES = \
 	agent-manager.c \
 	mcp-client.c \
+	mcp-config.c \
 	alerts.c \
 	arguments.c \
 	attributes.c \
