@@ -219,31 +219,40 @@ Tmux automatically loads this configuration on first MCP query.
 
 ## Development Status
 
-### ✅ Completed (Phase 2.1-2.3)
+### ✅ Completed (Phase 2.1-2.4)
 
-- [x] MCP Socket Bridge - Native MCP client
+- [x] MCP Socket Bridge - Native MCP client (752 lines)
 - [x] Stdio transport support
 - [x] Automatic config loading from ~/.claude.json
-- [x] Session-agent lifecycle integration
+- [x] Session-agent lifecycle integration (274 lines)
 - [x] Agent metadata structure and management
-- [x] `show-agent` command
-- [x] `mcp-query` command structure
+- [x] `show-agent` command (95 lines)
+- [x] `mcp-query` command structure (106 lines)
 - [x] Session lifecycle hooks
+- [x] **Session persistence (auto-save/restore)** - COMPLETED
+  - Auto-save context on detach
+  - Auto-restore context on attach
+  - Integrated in cmd-attach-session.c and cmd-detach-client.c
+  - Functions: `session_agent_save_context()` and `session_agent_restore_context()`
+- [x] Complete documentation (README.md, AGENTIC_FEATURES.md, examples/)
+- [x] Test suite and workflow examples
 
-### ⚠️ In Progress (Phase 2.3.5)
+### ⚠️ In Progress (Phase 2.5)
 
-- [ ] MCP protocol initialization handshake
-- [ ] Full MCP tool calling integration
-- [ ] Error handling and reconnection logic
+- [ ] MCP protocol initialization handshake (partial - basic structure in place)
+- [ ] Full MCP tool calling integration (framework ready, needs protocol completion)
+- [ ] Enhanced error handling and reconnection logic
 - [ ] Runtime testing with live MCP servers
+- [ ] Socket transport support (stdio working, socket planned)
 
-### 🚧 Planned (Phase 2.4)
+### 🚧 Planned (Phase 3.0)
 
-- [ ] Session persistence (auto-save/restore)
-- [ ] Enhanced-memory integration for context
-- [ ] Multi-session coordination
-- [ ] Agent performance metrics
-- [ ] Session templates
+- [ ] Enhanced-memory integration for automatic context saving
+- [ ] agent-runtime-mcp integration for goal registration
+- [ ] Multi-session coordination and orchestration
+- [ ] Agent performance metrics and analytics
+- [ ] Session templates library
+- [ ] Cross-session learning and optimization
 
 ## Testing
 
