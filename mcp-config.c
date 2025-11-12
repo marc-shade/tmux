@@ -92,8 +92,8 @@ mcp_load_config_from_file(struct mcp_client *client, const char *config_path)
 	snprintf(cmd, sizeof cmd, "%s/mcp-config-helper.py",
 	    TMUX_CONF);  /* Placeholder - use build dir for now */
 
-	/* For testing, use absolute path */
-	snprintf(cmd, sizeof cmd, "/tmp/tmux-agentic/mcp-config-helper.py");
+	/* Use permanent installation path */
+	snprintf(cmd, sizeof cmd, "/Volumes/FILES/code/tmux/mcp-config-helper.py");
 
 	fp = popen(cmd, "r");
 	if (fp == NULL)
