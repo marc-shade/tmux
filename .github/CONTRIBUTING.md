@@ -1,3 +1,9 @@
+## Note: This is a Fork with Agentic Features
+
+This is a fork of tmux with agentic AI integration features. For issues related to:
+- **Agentic features** (agent-aware sessions, MCP integration): Open issues here
+- **Standard tmux functionality**: Consider reporting to [upstream tmux](https://github.com/tmux/tmux)
+
 ## What should I do before opening an issue?
 
 Before opening an issue, please ensure that:
