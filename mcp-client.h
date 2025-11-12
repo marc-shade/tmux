@@ -127,4 +127,8 @@ const char		*mcp_state_string(enum mcp_state);
 char			*mcp_build_request(int, const char *, const char *);
 struct mcp_response	*mcp_parse_response(const char *);
 
+/* Low-level transport (for protocol extensions) */
+ssize_t			mcp_send(struct mcp_connection *, const char *, size_t);
+ssize_t			mcp_recv(struct mcp_connection *, char *, size_t);
+
 #endif /* MCP_CLIENT_H */

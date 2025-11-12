@@ -25,6 +25,7 @@
 
 #include "tmux.h"
 #include "session-agent.h"
+#include "session-mcp-integration.h"
 
 /* Create a new session agent */
 struct session_agent *
@@ -61,6 +62,10 @@ session_agent_destroy(struct session_agent *agent)
 {
 	if (agent == NULL)
 		return;
+
+	/* Complete goal in agent-runtime-mcp before cleanup */
+	if (global_mcp_client != NULL && agent->runtime_goal_id != NULL)
+		session_mcp_complete_goal(agent);
 
 	free(agent->agent_type);
 	free(agent->goal);

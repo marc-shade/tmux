@@ -237,18 +237,43 @@ Tmux automatically loads this configuration on first MCP query.
 - [x] Complete documentation (README.md, AGENTIC_FEATURES.md, examples/)
 - [x] Test suite and workflow examples
 
-### ⚠️ In Progress (Phase 2.5)
+### ✅ Completed (Phase 2.5)
 
-- [ ] MCP protocol initialization handshake (partial - basic structure in place)
-- [ ] Full MCP tool calling integration (framework ready, needs protocol completion)
-- [ ] Enhanced error handling and reconnection logic
-- [ ] Runtime testing with live MCP servers
+- [x] **MCP protocol initialization handshake** - COMPLETED
+  - Proper JSON-RPC 2.0 protocol with initialize/initialized sequence
+  - Protocol version negotiation (2024-11-05)
+  - Client capabilities advertisement
+  - Implemented in mcp-protocol.c (416 lines)
+- [x] **Full MCP tool calling integration** - COMPLETED
+  - Enhanced `mcp_call_tool_safe()` with automatic retry
+  - Connection health monitoring and stale detection
+  - Exponential backoff (1s, 2s, 4s)
+  - Error rate tracking and automatic reconnection
+- [x] **Enhanced error handling and reconnection logic** - COMPLETED
+  - `mcp_connect_with_retry()` for robust connection
+  - `mcp_connection_stale()` for health checks
+  - Connection statistics tracking
+  - Resource management (list_resources, read_resource)
+
+### ✅ Completed (Phase 3.0)
+
+- [x] **Enhanced-memory integration for automatic context saving** - COMPLETED
+  - Automatic save to enhanced-memory on session detach
+  - Session context stored as entities with observations
+  - Implemented in session-mcp-integration.c (292 lines)
+  - Function: `session_mcp_save_to_memory()`
+  - Integrated in cmd-detach-client.c
+- [x] **agent-runtime-mcp integration for goal registration** - COMPLETED
+  - Automatic goal registration on session creation
+  - Goal lifecycle management (register, update, complete)
+  - Functions: `session_mcp_register_goal()`, `session_mcp_update_goal_status()`, `session_mcp_complete_goal()`
+  - Integrated in cmd-new-session.c and session-agent.c
+  - Goal completion on session destruction
+
+### 🚧 Planned (Phase 4.0)
+
 - [ ] Socket transport support (stdio working, socket planned)
-
-### 🚧 Planned (Phase 3.0)
-
-- [ ] Enhanced-memory integration for automatic context saving
-- [ ] agent-runtime-mcp integration for goal registration
+- [ ] Runtime testing with live MCP servers
 - [ ] Multi-session coordination and orchestration
 - [ ] Agent performance metrics and analytics
 - [ ] Session templates library

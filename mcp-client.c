@@ -478,7 +478,7 @@ mcp_find_connection(struct mcp_client *client, const char *server_name)
 }
 
 /* Send data via appropriate transport */
-static ssize_t
+ssize_t
 mcp_send(struct mcp_connection *conn, const char *data, size_t len)
 {
 	ssize_t	n;
@@ -496,7 +496,7 @@ mcp_send(struct mcp_connection *conn, const char *data, size_t len)
 }
 
 /* Receive data via appropriate transport */
-static ssize_t
+ssize_t
 mcp_recv(struct mcp_connection *conn, char *buffer, size_t size)
 {
 	ssize_t		n;
