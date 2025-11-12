@@ -3,6 +3,8 @@
 [![Version](https://img.shields.io/badge/version-next--3.6-blue.svg)](https://github.com/marc-shade/tmux)
 [![License](https://img.shields.io/badge/license-ISC-green.svg)](COPYING)
 [![Build Status](https://img.shields.io/badge/build-passing-success.svg)]()
+[![Phase](https://img.shields.io/badge/phase-4.0%20complete-brightgreen.svg)](AGENTIC_FEATURES.md)
+[![Tests](https://img.shields.io/badge/tests-7%2F7%20passing-success.svg)](TESTING_RESULTS.md)
 
 **tmux** is a terminal multiplexer that enables multiple terminals to be created, accessed, and controlled from a single screen. This fork adds **native Model Context Protocol (MCP) integration** and **agentic AI workflow support** for advanced AI-assisted development workflows.
 
@@ -175,7 +177,7 @@ tmux automatically loads this configuration when you run your first `mcp-query` 
 
 ## 🧪 Development Status
 
-### ✅ Completed (Phase 2.1-2.4)
+### ✅ Phase 2.1-2.4: Foundation (Complete)
 - [x] Native MCP client with stdio transport (752 lines)
 - [x] Automatic config loading from ~/.claude.json
 - [x] Session-agent lifecycle integration (274 lines)
@@ -186,21 +188,39 @@ tmux automatically loads this configuration when you run your first `mcp-query` 
 - [x] Comprehensive documentation (3 guides + examples)
 - [x] Test suite and workflow demonstrations
 
-**Total Implementation**: 1,373+ lines of production code
+### ✅ Phase 2.5: MCP Protocol (Complete)
+- [x] MCP protocol initialization handshake (416 lines)
+- [x] Full MCP tool calling integration with retry logic
+- [x] Enhanced error handling and reconnection logic
+- [x] Connection health monitoring and stale detection
+- [x] Exponential backoff retry strategy (1s, 2s, 4s)
 
-### ⚠️ In Progress (Phase 2.5)
-- [ ] MCP protocol initialization handshake (partial)
-- [ ] Full MCP tool calling integration (framework ready)
-- [ ] Enhanced error handling and reconnection logic
-- [ ] Runtime testing with live MCP servers
-- [ ] Socket transport support
+### ✅ Phase 3.0: MCP Integration (Complete)
+- [x] Enhanced-memory integration for automatic context saving (292 lines)
+- [x] Agent-runtime-mcp integration for goal registration
+- [x] Goal lifecycle management (register, update, complete)
+- [x] Session lifecycle hooks (create, detach, destroy)
+- [x] Automatic context persistence on detach
 
-### 🚧 Planned (Phase 3.0)
-- [ ] Enhanced-memory integration for automatic context
-- [ ] agent-runtime-mcp goal registration
+### ✅ Phase 4.0: Runtime Testing (Complete - 2025-11-12)
+- [x] Comprehensive runtime testing with live MCP servers
+- [x] 7/7 automated tests passing
+- [x] Database corruption issues resolved
+- [x] All integration points verified working
+- [x] Complete testing documentation (600+ lines)
+
+**Total Implementation**: 2,162+ lines of production code + 1,576 lines of documentation
+
+See [TESTING_RESULTS.md](TESTING_RESULTS.md) for detailed test results.
+
+### 🚧 Planned (Phase 4.1+)
+- [ ] Socket transport support (Unix domain sockets)
 - [ ] Multi-session coordination and orchestration
 - [ ] Agent performance metrics and analytics
+- [ ] Connection pooling for improved performance
+- [ ] Async MCP operations for better responsiveness
 - [ ] Session templates library
+- [ ] Cross-session learning and optimization
 
 ## 🤝 Contributing
 
@@ -225,6 +245,14 @@ This agentic feature set maintains the same ISC license.
 - **Original tmux** by [Nicholas Marriott](https://github.com/nicm) and contributors
 - **Model Context Protocol** by [Anthropic](https://modelcontextprotocol.io/)
 - **Agentic features** by [Marc Shade](https://github.com/marc-shade)
+
+## 📚 Documentation
+
+- **[AGENTIC_FEATURES.md](AGENTIC_FEATURES.md)** - Complete feature documentation and architecture
+- **[TESTING_RESULTS.md](TESTING_RESULTS.md)** - Comprehensive test results and analysis
+- **[QUICKSTART.md](examples/QUICKSTART.md)** - Quick start guide for new users
+- **[test-with-live-servers.md](examples/test-with-live-servers.md)** - Live server testing guide
+- **[test-mcp-integration.sh](examples/test-mcp-integration.sh)** - Automated test suite
 
 ## 🔗 Links
 
