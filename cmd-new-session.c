@@ -39,9 +39,10 @@ const struct cmd_entry cmd_new_session_entry = {
 	.name = "new-session",
 	.alias = "new",
 
-	.args = { "Ac:dDe:EF:f:n:Ps:t:x:Xy:", 0, -1, NULL },
+	.args = { "Ac:dDe:EF:f:G:n:o:Ps:t:x:Xy:", 0, -1, NULL },
 	.usage = "[-AdDEPX] [-c start-directory] [-e environment] [-F format] "
-		 "[-f flags] [-n window-name] [-s session-name] "
+		 "[-f flags] [-G agent-type] [-n window-name] [-o goal] "
+		 "[-s session-name] "
 		 CMD_TARGET_SESSION_USAGE " [-x width] [-y height] "
 		 "[shell-command [argument ...]]",
 
@@ -276,6 +277,29 @@ cmd_new_session_exec(struct cmd *self, struct cmdq_item *item)
 		av = args_next_value(av);
 	}
 	s = session_create(prefix, newname, cwd, env, oo, tiop);
+
+	/* Create agent metadata if requested */
+	if (args_has(args, 'G') || args_has(args, 'o')) {
+		const char	*agent_type, *goal;
+
+		agent_type = args_get(args, 'G');
+		goal = args_get(args, 'o');
+
+		/* Use default agent type if not specified */
+		if (agent_type == NULL)
+			agent_type = AGENT_TYPE_CUSTOM;
+
+		/* Use default goal if not specified */
+		if (goal == NULL)
+			goal = "General session work";
+
+		/* Create agent metadata */
+		s->agent_metadata = session_agent_create(agent_type, goal, s->name);
+
+		/* Register with agent-runtime-mcp */
+		if (global_mcp_client != NULL)
+			session_agent_register(s->agent_metadata);
+	}
 
 	/* Spawn the initial window. */
 	sc.item = item;
