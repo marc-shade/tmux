@@ -37,6 +37,7 @@ struct options	*global_options;	/* server options */
 struct options	*global_s_options;	/* session options */
 struct options	*global_w_options;	/* window options */
 struct environ	*global_environ;
+struct mcp_client *global_mcp_client;	/* MCP client for agentic system */
 
 struct timeval	 start_time;
 const char	*socket_path;

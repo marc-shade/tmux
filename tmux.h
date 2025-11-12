@@ -36,6 +36,7 @@
 #include "tmux-protocol.h"
 #include "xmalloc.h"
 #include "agent-metadata.h"
+#include "mcp-client.h"
 
 extern char   **environ;
 
@@ -2263,6 +2264,7 @@ extern struct options	*global_w_options;
 extern struct environ	*global_environ;
 extern struct timeval	 start_time;
 extern const char	*socket_path;
+extern struct mcp_client *global_mcp_client;
 extern const char	*shell_command;
 extern int		 ptm_fd;
 extern const char	*shell_command;

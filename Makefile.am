@@ -74,6 +74,7 @@ endif
 # List of sources.
 dist_tmux_SOURCES = \
 	agent-manager.c \
+	mcp-client.c \
 	alerts.c \
 	arguments.c \
 	attributes.c \
@@ -107,6 +108,7 @@ dist_tmux_SOURCES = \
 	cmd-list-windows.c \
 	cmd-load-buffer.c \
 	cmd-lock-server.c \
+	cmd-mcp-query.c \
 	cmd-move-window.c \
 	cmd-new-session.c \
 	cmd-new-window.c \
