@@ -76,7 +76,10 @@ dist_tmux_SOURCES = \
 	agent-manager.c \
 	mcp-client.c \
 	mcp-config.c \
+	mcp-metrics.c \
+	mcp-pool.c \
 	mcp-protocol.c \
+	mcp-socket.c \
 	session-agent.c \
 	session-mcp-integration.c \
 	alerts.c \
@@ -113,6 +116,7 @@ dist_tmux_SOURCES = \
 	cmd-load-buffer.c \
 	cmd-lock-server.c \
 	cmd-mcp-query.c \
+	cmd-mcp-stats.c \
 	cmd-move-window.c \
 	cmd-new-session.c \
 	cmd-new-window.c \

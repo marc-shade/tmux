@@ -24,8 +24,11 @@
  * Enhanced protocol support, error handling, and advanced features
  */
 
+#include "mcp-client.h"  /* for enum mcp_transport */
+
 /* Protocol handshake */
 int	mcp_protocol_initialize(struct mcp_connection *);
+int	mcp_protocol_initialize_socket(struct mcp_connection *);
 
 /* Connection management with retry */
 int	mcp_connect_with_retry(struct mcp_client *, const char *);

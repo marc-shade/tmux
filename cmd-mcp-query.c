@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include "tmux.h"
+#include "mcp-protocol.h"
 
 /*
  * Query MCP server and call tool.

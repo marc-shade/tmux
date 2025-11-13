@@ -283,15 +283,42 @@ Tmux automatically loads this configuration on first MCP query.
   - QUICKSTART.md (350 lines)
   - TESTING_RESULTS.md (comprehensive results)
 
-### 🚧 Planned (Phase 4.1+)
+### ✅ Completed (Phase 4.1)
 
-- [ ] Socket transport support (stdio working, socket planned)
+- [x] **Unix domain socket transport** - COMPLETED
+  - Native socket support for better performance
+  - Automatic fallback to stdio if socket unavailable
+  - Socket path configuration in ~/.claude.json
+  - Non-blocking I/O with proper buffering
+  - Implemented in mcp-socket.c (400+ lines)
+- [x] **Connection pooling** - COMPLETED
+  - Per-server connection pools
+  - Reference counting and automatic cleanup
+  - Idle timeout (5 minutes default)
+  - Configurable pool sizes
+  - Pool statistics tracking
+  - Implemented in mcp-pool.c (400+ lines)
+- [x] **Performance metrics tracking** - COMPLETED
+  - Per-server latency tracking (min/max/avg/p95/p99)
+  - Success/failure rate monitoring
+  - Throughput metrics (bytes/sec, messages/sec)
+  - Connection health tracking
+  - Error type tracking
+  - Implemented in mcp-metrics.c (300+ lines)
+- [x] **mcp-stats command** - COMPLETED
+  - Display per-server statistics
+  - Connection pool statistics
+  - Performance metrics visualization
+  - Implemented in cmd-mcp-stats.c (237 lines)
+
+### 🚧 Planned (Phase 4.2+)
+
 - [ ] Multi-session coordination and orchestration
-- [ ] Agent performance metrics and analytics
 - [ ] Session templates library
 - [ ] Cross-session learning and optimization
-- [ ] Connection pooling for improved performance
 - [ ] Async MCP operations for better responsiveness
+- [ ] Agent performance analytics dashboard
+- [ ] Integration with additional MCP servers
 
 ## Testing
 
