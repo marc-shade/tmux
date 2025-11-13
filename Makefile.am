@@ -85,6 +85,8 @@ dist_tmux_SOURCES = \
 	session-agent.c \
 	session-mcp-integration.c \
 	session-template.c \
+	context-semantic.c \
+	context-compress.c \
 	alerts.c \
 	arguments.c \
 	attributes.c \

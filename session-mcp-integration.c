@@ -26,11 +26,18 @@
 #include "mcp-client.h"
 #include "mcp-protocol.h"
 #include "session-agent.h"
+#include "context-semantic.h"
+#include "context-compress.h"
 
 /*
  * Session-MCP Integration
  * Automatic integration between sessions and MCP servers
  * (enhanced-memory and agent-runtime-mcp)
+ *
+ * Phase 4.4C: Enhanced with smart context management:
+ * - Semantic extraction of key information
+ * - Context compression
+ * - Relevance-based filtering
  */
 
 /*
@@ -288,4 +295,138 @@ session_mcp_get_tasks(struct session_agent *agent)
 	free(params);
 
 	return (resp);
+}
+
+/*
+ * Phase 4.4C: Smart Context Management Functions
+ */
+
+/*
+ * Save session context with semantic extraction and compression
+ */
+int
+session_mcp_save_smart_context(struct session_agent *agent, struct session *s)
+{
+	struct semantic_context		*semantic;
+	struct compressed_context	*compressed;
+	struct mcp_response		*resp;
+	char				*params, *summary;
+	size_t				 params_len;
+	char				 timestamp[64];
+	time_t				 now;
+	struct tm			*tm_info;
+	int				 ret;
+
+	if (agent == NULL || s == NULL || global_mcp_client == NULL)
+		return (-1);
+
+	/* Extract semantic context */
+	semantic = context_semantic_extract(s, agent);
+	if (semantic == NULL) {
+		log_debug("Failed to extract semantic context");
+		return (-1);
+	}
+
+	/* Compress context */
+	compressed = context_compress(semantic);
+	if (compressed == NULL) {
+		context_semantic_free(semantic);
+		log_debug("Failed to compress context");
+		return (-1);
+	}
+
+	/* Format timestamp */
+	now = time(NULL);
+	tm_info = localtime(&now);
+	strftime(timestamp, sizeof timestamp, "%Y-%m-%d %H:%M:%S", tm_info);
+
+	/* Use compressed summary for observations */
+	summary = compressed->summary;
+
+	/* Build entity creation params with smart context */
+	params_len = 2048 + strlen(summary);
+	params = xmalloc(params_len);
+	snprintf(params, params_len,
+	    "{\"entities\":[{"
+	    "\"name\":\"session-%s-%ld\","
+	    "\"entityType\":\"smart_context\","
+	    "\"observations\":["
+	    "\"Type: smart_compressed\","
+	    "\"Agent: %s\","
+	    "\"Quality: %.2f\","
+	    "\"Compression: %.2f\","
+	    "\"Commands: %u\","
+	    "\"Patterns: %u\","
+	    "\"Summary: %s\","
+	    "\"Timestamp: %s\""
+	    "]"
+	    "}]}",
+	    agent->session_name ? agent->session_name : "unknown",
+	    (long)agent->created,
+	    agent->agent_type ? agent->agent_type : "unknown",
+	    compressed->quality,
+	    compressed->stats.compression_ratio,
+	    semantic->command_count,
+	    semantic->pattern_count,
+	    summary,
+	    timestamp);
+
+	/* Call enhanced-memory create_entities */
+	resp = mcp_call_tool_safe(global_mcp_client, "enhanced-memory",
+	    "create_entities", params);
+	free(params);
+
+	if (resp == NULL || !resp->success) {
+		if (resp != NULL)
+			mcp_response_free(resp);
+		ret = -1;
+	} else {
+		mcp_response_free(resp);
+		agent->context_saved = 1;
+		ret = 0;
+
+		log_debug("Smart context saved: quality=%.2f compression=%.2f",
+		    compressed->quality, compressed->stats.compression_ratio);
+	}
+
+	/* Cleanup */
+	context_compress_free(compressed);
+	context_semantic_free(semantic);
+
+	return (ret);
+}
+
+/*
+ * Get context relevance score for restoration decision
+ */
+float
+session_mcp_get_context_relevance(struct session *s, struct session_agent *agent)
+{
+	struct semantic_context	*semantic;
+	float			 relevance;
+
+	if (agent == NULL || agent->session_name == NULL || s == NULL)
+		return (0.0);
+
+	/* Extract current semantic context */
+	semantic = context_semantic_extract(s, agent);
+	if (semantic == NULL)
+		return (0.5);	/* Default medium relevance */
+
+	/* Relevance based on context quality and activity */
+	relevance = semantic->overall_quality;
+
+	/* Boost relevance for active sessions */
+	if (semantic->command_count > 10)
+		relevance *= 1.2;
+	if (semantic->pattern_count > 3)
+		relevance *= 1.1;
+
+	/* Cap at 1.0 */
+	if (relevance > 1.0)
+		relevance = 1.0;
+
+	context_semantic_free(semantic);
+
+	return (relevance);
 }
