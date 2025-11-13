@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-next--3.6-blue.svg)](https://github.com/marc-shade/tmux)
 [![License](https://img.shields.io/badge/license-ISC-green.svg)](COPYING)
 [![Build Status](https://img.shields.io/badge/build-passing-success.svg)]()
-[![Phase](https://img.shields.io/badge/phase-4.0%20complete-brightgreen.svg)](AGENTIC_FEATURES.md)
+[![Phase](https://img.shields.io/badge/phase-4.3%20complete-brightgreen.svg)](AGENTIC_FEATURES.md)
 [![Tests](https://img.shields.io/badge/tests-7%2F7%20passing-success.svg)](TESTING_RESULTS.md)
 
 **tmux** is a terminal multiplexer that enables multiple terminals to be created, accessed, and controlled from a single screen. This fork adds **native Model Context Protocol (MCP) integration** and **agentic AI workflow support** for advanced AI-assisted development workflows.
@@ -237,11 +237,26 @@ See [TESTING_RESULTS.md](TESTING_RESULTS.md) and [PHASE_4.1_FEATURES.md](PHASE_4
 
 **Responsiveness Improvement**: MCP operations no longer block tmux UI
 
-### 🚧 Planned (Phase 4.3+)
-- [ ] Multi-session coordination and orchestration
+### ✅ Phase 4.3: Multi-Session Coordination (Complete - 2025-11-13)
+- [x] Agent coordination fields in session_agent structure (285 lines)
+- [x] 10 coordination functions (join, leave, share, sync, etc.)
+- [x] `agent-join-group` / `ajoin` - Join coordination group with automatic peer discovery
+- [x] `agent-leave-group` / `aleave` - Leave group and remove from peer lists
+- [x] `agent-share` / `ashare` - Share key=value context with group
+- [x] `agent-peers` / `apeers` - List peers, show role, display shared context
+- [x] `list-agent-groups` / `lsag` - List all coordination groups system-wide
+- [x] Coordinator/member roles (first session becomes coordinator)
+- [x] Automatic bidirectional peer discovery
+- [x] Context sharing between coordinated sessions
+- [x] Comprehensive test suite (20/20 tests, 38/38 assertions passing)
+
+**Collaboration Enabled**: Multiple AI agents can now coordinate across tmux sessions
+
+### 🚧 Planned (Phase 4.4+)
 - [ ] Session templates library
 - [ ] Cross-session learning and optimization
 - [ ] Agent performance analytics dashboard
+- [ ] Advanced context management
 
 ## 🤝 Contributing
 

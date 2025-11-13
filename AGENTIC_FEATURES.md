@@ -311,12 +311,36 @@ Tmux automatically loads this configuration on first MCP query.
   - Performance metrics visualization
   - Implemented in cmd-mcp-stats.c (237 lines)
 
-### 🚧 Planned (Phase 4.2+)
+### ✅ Completed (Phase 4.2)
 
-- [ ] Multi-session coordination and orchestration
+- [x] **Async MCP operations** - COMPLETED
+  - Non-blocking tool calls with libevent integration
+  - Priority-based request queuing (urgent, high, normal, low)
+  - Callback-based completion handlers
+  - Background context saving
+  - Parallel request execution support
+  - Implemented in mcp-async.c (700+ lines)
+- [x] **Enhanced responsiveness** - COMPLETED
+  - MCP operations no longer block tmux UI
+  - Per-server concurrency limits (5 concurrent max)
+  - Request cancellation support
+  - Comprehensive async test suite (12/12 tests passing)
+
+### ✅ Completed (Phase 4.3)
+
+- [x] **Multi-session agent coordination** - COMPLETED
+  - Extended session_agent structure with coordination fields (285 lines)
+  - 10 coordination functions (join, leave, share, sync, etc.)
+  - 5 new commands: agent-join-group, agent-leave-group, agent-share, agent-peers, list-agent-groups
+  - Automatic peer discovery via RB_FOREACH iteration
+  - Coordinator/member roles (first session becomes coordinator)
+  - Key-value context sharing between coordinated sessions
+  - Comprehensive test suite (20/20 tests, 38/38 assertions passing)
+
+### 🚧 Planned (Phase 4.4+)
+
 - [ ] Session templates library
 - [ ] Cross-session learning and optimization
-- [ ] Async MCP operations for better responsiveness
 - [ ] Agent performance analytics dashboard
 - [ ] Integration with additional MCP servers
 
