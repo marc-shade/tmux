@@ -87,6 +87,8 @@ dist_tmux_SOURCES = \
 	session-template.c \
 	context-semantic.c \
 	context-compress.c \
+	agent-learning.c \
+	agent-optimizer.c \
 	alerts.c \
 	arguments.c \
 	attributes.c \
@@ -149,6 +151,7 @@ dist_tmux_SOURCES = \
 	cmd-set-option.c \
 	cmd-show-agent.c \
 	cmd-agent-analytics.c \
+	cmd-agent-optimize.c \
 	cmd-agent-join-group.c \
 	cmd-agent-leave-group.c \
 	cmd-agent-share.c \
