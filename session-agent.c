@@ -26,6 +26,7 @@
 #include "tmux.h"
 #include "session-agent.h"
 #include "session-mcp-integration.h"
+#include "agent-analytics.h"
 
 /* Create a new session agent */
 struct session_agent *
@@ -63,6 +64,9 @@ session_agent_create(const char *agent_type, const char *goal,
 	agent->is_coordinator = 0;
 	agent->last_coordination = 0;
 
+	/* Phase 4.4: Record session start for analytics */
+	agent_analytics_record_session_start(agent->agent_type);
+
 	return (agent);
 }
 
@@ -76,6 +80,10 @@ session_agent_destroy(struct session_agent *agent)
 	/* Complete goal in agent-runtime-mcp before cleanup */
 	if (global_mcp_client != NULL && agent->runtime_goal_id != NULL)
 		session_mcp_complete_goal(agent);
+
+	/* Phase 4.4: Record session end for analytics (success = goal completed) */
+	agent_analytics_record_session_end(agent->agent_type,
+	    agent->runtime_goal_id != NULL ? 1 : 0);
 
 	free(agent->agent_type);
 	free(agent->goal);
