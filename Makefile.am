@@ -73,6 +73,7 @@ endif
 
 # List of sources.
 dist_tmux_SOURCES = \
+	agent-analytics.c \
 	agent-manager.c \
 	mcp-async.c \
 	mcp-client.c \
@@ -144,6 +145,7 @@ dist_tmux_SOURCES = \
 	cmd-set-environment.c \
 	cmd-set-option.c \
 	cmd-show-agent.c \
+	cmd-agent-analytics.c \
 	cmd-agent-join-group.c \
 	cmd-agent-leave-group.c \
 	cmd-agent-share.c \
