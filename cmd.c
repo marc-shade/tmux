@@ -109,6 +109,8 @@ extern const struct cmd_entry cmd_agent_leave_group_entry;
 extern const struct cmd_entry cmd_agent_share_entry;
 extern const struct cmd_entry cmd_agent_peers_entry;
 extern const struct cmd_entry cmd_list_agent_groups_entry;
+extern const struct cmd_entry cmd_list_templates_entry;
+extern const struct cmd_entry cmd_new_from_template_entry;
 extern const struct cmd_entry cmd_show_buffer_entry;
 extern const struct cmd_entry cmd_show_environment_entry;
 extern const struct cmd_entry cmd_show_hooks_entry;
@@ -210,6 +212,8 @@ const struct cmd_entry *cmd_table[] = {
 	&cmd_agent_share_entry,
 	&cmd_agent_peers_entry,
 	&cmd_list_agent_groups_entry,
+	&cmd_list_templates_entry,
+	&cmd_new_from_template_entry,
 	&cmd_show_buffer_entry,
 	&cmd_show_environment_entry,
 	&cmd_show_hooks_entry,

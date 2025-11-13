@@ -84,6 +84,7 @@ dist_tmux_SOURCES = \
 	mcp-socket.c \
 	session-agent.c \
 	session-mcp-integration.c \
+	session-template.c \
 	alerts.c \
 	arguments.c \
 	attributes.c \
@@ -151,6 +152,8 @@ dist_tmux_SOURCES = \
 	cmd-agent-share.c \
 	cmd-agent-peers.c \
 	cmd-list-agent-groups.c \
+	cmd-list-templates.c \
+	cmd-new-from-template.c \
 	cmd-show-environment.c \
 	cmd-show-messages.c \
 	cmd-show-options.c \
