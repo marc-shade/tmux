@@ -53,6 +53,16 @@ session_agent_create(const char *agent_type, const char *goal,
 	agent->tasks_completed = 0;
 	agent->interactions = 0;
 
+	/* Phase 4.3: Initialize coordination fields */
+	agent->coordination_group = NULL;
+	agent->peer_sessions = NULL;
+	agent->num_peers = 0;
+	agent->max_peers = 32;		/* Default max peers */
+	agent->shared_context = NULL;
+	agent->shared_context_len = 0;
+	agent->is_coordinator = 0;
+	agent->last_coordination = 0;
+
 	return (agent);
 }
 
@@ -77,6 +87,18 @@ session_agent_destroy(struct session_agent *agent)
 		free(agent->runtime_session_id);
 	if (agent->context_key != NULL)
 		free(agent->context_key);
+
+	/* Phase 4.3: Free coordination fields */
+	if (agent->coordination_group != NULL)
+		free(agent->coordination_group);
+	if (agent->peer_sessions != NULL) {
+		int i;
+		for (i = 0; i < agent->num_peers; i++)
+			free(agent->peer_sessions[i]);
+		free(agent->peer_sessions);
+	}
+	if (agent->shared_context != NULL)
+		free(agent->shared_context);
 
 	free(agent);
 }
@@ -276,4 +298,254 @@ const char *
 session_agent_get_runtime_id(struct session_agent *agent)
 {
 	return (agent != NULL ? agent->runtime_goal_id : NULL);
+}
+
+/* ========================================================================
+ * Phase 4.3: Multi-Session Coordination Functions
+ * ======================================================================== */
+
+/* Join a coordination group */
+int
+session_agent_join_group(struct session_agent *agent, const char *group_name)
+{
+	if (agent == NULL || group_name == NULL || strlen(group_name) == 0)
+		return (-1);
+
+	/* Leave existing group if already in one */
+	if (agent->coordination_group != NULL)
+		session_agent_leave_group(agent);
+
+	/* Set group name */
+	agent->coordination_group = xstrdup(group_name);
+
+	/* Allocate peer sessions array */
+	agent->peer_sessions = xcalloc(agent->max_peers,
+	    sizeof(char *));
+	agent->num_peers = 0;
+
+	/* First session in group becomes coordinator */
+	agent->is_coordinator = 1;
+	agent->last_coordination = time(NULL);
+
+	/* TODO: Register group with agent-runtime-mcp as a shared goal */
+
+	return (0);
+}
+
+/* Leave coordination group */
+int
+session_agent_leave_group(struct session_agent *agent)
+{
+	int i;
+
+	if (agent == NULL || agent->coordination_group == NULL)
+		return (-1);
+
+	/* Free group name */
+	free(agent->coordination_group);
+	agent->coordination_group = NULL;
+
+	/* Free peer sessions */
+	if (agent->peer_sessions != NULL) {
+		for (i = 0; i < agent->num_peers; i++)
+			free(agent->peer_sessions[i]);
+		free(agent->peer_sessions);
+		agent->peer_sessions = NULL;
+	}
+	agent->num_peers = 0;
+
+	/* Free shared context */
+	if (agent->shared_context != NULL) {
+		free(agent->shared_context);
+		agent->shared_context = NULL;
+		agent->shared_context_len = 0;
+	}
+
+	agent->is_coordinator = 0;
+	agent->last_coordination = 0;
+
+	/* TODO: Unregister from group in agent-runtime-mcp */
+
+	return (0);
+}
+
+/* Add peer to coordination group */
+int
+session_agent_add_peer(struct session_agent *agent, const char *peer_name)
+{
+	int i;
+
+	if (agent == NULL || peer_name == NULL ||
+	    agent->coordination_group == NULL)
+		return (-1);
+
+	/* Check if already a peer */
+	for (i = 0; i < agent->num_peers; i++) {
+		if (strcmp(agent->peer_sessions[i], peer_name) == 0)
+			return (0);	/* Already exists */
+	}
+
+	/* Check if group is full */
+	if (agent->num_peers >= agent->max_peers)
+		return (-1);
+
+	/* Add peer */
+	agent->peer_sessions[agent->num_peers++] = xstrdup(peer_name);
+	agent->last_coordination = time(NULL);
+
+	return (0);
+}
+
+/* Remove peer from coordination group */
+int
+session_agent_remove_peer(struct session_agent *agent, const char *peer_name)
+{
+	int i, found = -1;
+
+	if (agent == NULL || peer_name == NULL ||
+	    agent->coordination_group == NULL)
+		return (-1);
+
+	/* Find peer */
+	for (i = 0; i < agent->num_peers; i++) {
+		if (strcmp(agent->peer_sessions[i], peer_name) == 0) {
+			found = i;
+			break;
+		}
+	}
+
+	if (found < 0)
+		return (-1);
+
+	/* Free peer name */
+	free(agent->peer_sessions[found]);
+
+	/* Shift remaining peers */
+	for (i = found; i < agent->num_peers - 1; i++)
+		agent->peer_sessions[i] = agent->peer_sessions[i + 1];
+
+	agent->num_peers--;
+	agent->last_coordination = time(NULL);
+
+	return (0);
+}
+
+/* Share context with coordination group */
+int
+session_agent_share_context(struct session_agent *agent, const char *key,
+    const char *value)
+{
+	char	*new_context;
+
+	if (agent == NULL || key == NULL || value == NULL ||
+	    agent->coordination_group == NULL)
+		return (-1);
+
+	/*
+	 * Simple key-value storage using newline-separated format:
+	 * key=value\n
+	 * In production, would use proper JSON library
+	 */
+	if (agent->shared_context == NULL) {
+		/* First entry */
+		if (asprintf(&new_context, "%s=%s\n", key, value) < 0)
+			return (-1);
+	} else {
+		/* Append to existing context */
+		if (asprintf(&new_context, "%s%s=%s\n",
+		    agent->shared_context, key, value) < 0)
+			return (-1);
+	}
+
+	/* Replace context */
+	free(agent->shared_context);
+	agent->shared_context = new_context;
+	agent->shared_context_len = strlen(new_context);
+	agent->last_coordination = time(NULL);
+
+	/* TODO: Sync to group via agent-runtime-mcp goal metadata */
+
+	return (0);
+}
+
+/* Get shared context value */
+const char *
+session_agent_get_shared_context(struct session_agent *agent, const char *key)
+{
+	static char	 value[1024];
+	char		*data, *line, *eq;
+	size_t		 keylen;
+
+	if (agent == NULL || key == NULL ||
+	    agent->shared_context == NULL)
+		return (NULL);
+
+	keylen = strlen(key);
+	data = xstrdup(agent->shared_context);
+
+	/* Simple linear search for key=value\n */
+	line = strtok(data, "\n");
+	while (line != NULL) {
+		if (strncmp(line, key, keylen) == 0 && line[keylen] == '=') {
+			eq = strchr(line, '=');
+			if (eq != NULL) {
+				strlcpy(value, eq + 1, sizeof value);
+				free(data);
+				return (value);
+			}
+		}
+		line = strtok(NULL, "\n");
+	}
+
+	free(data);
+	return (NULL);
+}
+
+/* Synchronize with coordination group */
+int
+session_agent_sync_group(struct session_agent *agent)
+{
+	if (agent == NULL || agent->coordination_group == NULL)
+		return (-1);
+
+	agent->last_coordination = time(NULL);
+
+	/*
+	 * TODO: Implement full group synchronization:
+	 * 1. Query agent-runtime-mcp for group goal metadata
+	 * 2. Update shared_context from goal metadata
+	 * 3. Update peer_sessions from goal member list
+	 * 4. Aggregate progress from all peers
+	 */
+
+	return (0);
+}
+
+/* Check if agent is coordinated */
+int
+session_agent_is_coordinated(struct session_agent *agent)
+{
+	return (agent != NULL && agent->coordination_group != NULL);
+}
+
+/* Check if agent is group coordinator */
+int
+session_agent_is_coordinator(struct session_agent *agent)
+{
+	return (agent != NULL && agent->is_coordinator);
+}
+
+/* List peer sessions */
+const char **
+session_agent_list_peers(struct session_agent *agent, int *count)
+{
+	if (agent == NULL || count == NULL ||
+	    agent->coordination_group == NULL) {
+		if (count != NULL)
+			*count = 0;
+		return (NULL);
+	}
+
+	*count = agent->num_peers;
+	return ((const char **)agent->peer_sessions);
 }

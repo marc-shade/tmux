@@ -55,6 +55,16 @@ struct session_agent {
 	/* Statistics */
 	u_int		 tasks_completed;	/* Tasks completed */
 	u_int		 interactions;		/* User interactions */
+
+	/* Phase 4.3: Multi-Session Coordination */
+	char		*coordination_group;	/* Optional group name */
+	char		**peer_sessions;	/* Array of peer session names */
+	int		 num_peers;		/* Number of peers */
+	int		 max_peers;		/* Max peers (default 32) */
+	char		*shared_context;	/* JSON shared state */
+	size_t		 shared_context_len;	/* Shared context length */
+	int		 is_coordinator;	/* Leader flag */
+	time_t		 last_coordination;	/* Last coordination sync */
 };
 
 /* Function prototypes */
@@ -76,5 +86,19 @@ int	session_agent_restore_context(struct session_agent *);
 const char	*session_agent_get_type(struct session_agent *);
 const char	*session_agent_get_goal(struct session_agent *);
 const char	*session_agent_get_runtime_id(struct session_agent *);
+
+/* Phase 4.3: Multi-Session Coordination */
+int		 session_agent_join_group(struct session_agent *, const char *);
+int		 session_agent_leave_group(struct session_agent *);
+int		 session_agent_add_peer(struct session_agent *, const char *);
+int		 session_agent_remove_peer(struct session_agent *, const char *);
+int		 session_agent_share_context(struct session_agent *, const char *,
+		     const char *);
+const char	*session_agent_get_shared_context(struct session_agent *,
+		     const char *);
+int		 session_agent_sync_group(struct session_agent *);
+int		 session_agent_is_coordinated(struct session_agent *);
+int		 session_agent_is_coordinator(struct session_agent *);
+const char	**session_agent_list_peers(struct session_agent *, int *);
 
 #endif /* SESSION_AGENT_H */
