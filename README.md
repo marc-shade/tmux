@@ -219,13 +219,26 @@ tmux automatically loads this configuration when you run your first `mcp-query` 
 - [x] Per-server latency tracking (min/max/avg/p95/p99)
 - [x] Connection health monitoring and pool statistics
 
-**Total Implementation**: 3,499+ lines of production code + 2,506 lines of documentation
+**Total Implementation**: 4,199+ lines of production code + 2,506 lines of documentation
 
 See [TESTING_RESULTS.md](TESTING_RESULTS.md) and [PHASE_4.1_FEATURES.md](PHASE_4.1_FEATURES.md) for detailed results.
 
-### 🚧 Planned (Phase 4.2+)
+### ✅ Phase 4.2: Async Operations (Complete - 2025-11-13)
+- [x] Asynchronous MCP operations framework (mcp-async.c, 700+ lines)
+- [x] Priority-based request queuing (urgent, high, normal, low)
+- [x] Callback-based completion handlers
+- [x] Timeout handling with libevent integration
+- [x] Parallel request execution support
+- [x] Background context saving (non-blocking detach)
+- [x] Request cancellation support
+- [x] Per-server concurrency limits (5 concurrent max)
+- [x] Event loop integration with libevent
+- [x] Comprehensive async test suite (12/12 tests passing)
+
+**Responsiveness Improvement**: MCP operations no longer block tmux UI
+
+### 🚧 Planned (Phase 4.3+)
 - [ ] Multi-session coordination and orchestration
-- [ ] Async MCP operations for better responsiveness
 - [ ] Session templates library
 - [ ] Cross-session learning and optimization
 - [ ] Agent performance analytics dashboard

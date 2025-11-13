@@ -74,6 +74,7 @@ endif
 # List of sources.
 dist_tmux_SOURCES = \
 	agent-manager.c \
+	mcp-async.c \
 	mcp-client.c \
 	mcp-config.c \
 	mcp-metrics.c \
