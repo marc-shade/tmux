@@ -29,19 +29,6 @@
  * string!
  */
 
-struct paste_buffer {
-	char		*data;
-	size_t		 size;
-
-	char		*name;
-	time_t		 created;
-	int		 automatic;
-	u_int		 order;
-
-	RB_ENTRY(paste_buffer) name_entry;
-	RB_ENTRY(paste_buffer) time_entry;
-};
-
 static u_int	paste_next_index;
 static u_int	paste_next_order;
 static u_int	paste_num_automatic;
@@ -119,7 +106,7 @@ paste_is_empty(void)
 
 /* Get the most recent automatic buffer. */
 struct paste_buffer *
-paste_get_top(const char **name)
+paste_get_top(char **name)
 {
 	struct paste_buffer	*pb;
 
@@ -129,7 +116,7 @@ paste_get_top(const char **name)
 	if (pb == NULL)
 		return (NULL);
 	if (name != NULL)
-		*name = pb->name;
+		*name = xstrdup(pb->name);
 	return (pb);
 }
 

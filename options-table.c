@@ -36,7 +36,7 @@ static const char *options_table_mode_keys_list[] = {
 	"emacs", "vi", NULL
 };
 static const char *options_table_clock_mode_style_list[] = {
-	"12", "24", NULL
+	"12", "24", "12-with-seconds", "24-with-seconds", NULL
 };
 static const char *options_table_status_list[] = {
 	"off", "on", "2", "3", "4", "5", NULL
@@ -83,6 +83,9 @@ static const char *options_table_popup_border_lines_list[] = {
 };
 static const char *options_table_set_clipboard_list[] = {
 	"off", "external", "on", NULL
+};
+static const char *options_table_get_clipboard_list[] = {
+	"off", "buffer", "request", "both", NULL
 };
 static const char *options_table_window_size_list[] = {
 	"largest", "smallest", "manual", "latest", NULL
@@ -405,6 +408,18 @@ const struct options_table_entry options_table[] = {
 	  .text = "Whether to send focus events to applications."
 	},
 
+	{ .name = "get-clipboard",
+	  .type = OPTIONS_TABLE_CHOICE,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .choices = options_table_get_clipboard_list,
+	  .default_num = 1,
+	  .text = "When an application requests the clipboard, whether to "
+	          "ignore the request ('off'); respond with the newest buffer "
+	          "('buffer'); request the clipboard from the most recently "
+	          "used terminal ('request'); or to request the clipboard, "
+	          "create a buffer, and send it to the application ('both')."
+	},
+
 	{ .name = "history-file",
 	  .type = OPTIONS_TABLE_STRING,
 	  .scope = OPTIONS_TABLE_SERVER,
@@ -647,6 +662,13 @@ const struct options_table_entry options_table[] = {
 	  .default_num = 750,
 	  .unit = "milliseconds",
 	  .text = "Time for which status line messages should appear."
+	},
+
+	{ .name = "focus-follows-mouse",
+	  .type = OPTIONS_TABLE_FLAG,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .default_num = 0,
+	  .text = "Whether moving the mouse into a pane selects it."
 	},
 
 	{ .name = "history-limit",
@@ -943,7 +965,7 @@ const struct options_table_entry options_table[] = {
 	{ .name = "prompt-cursor-colour",
 	  .type = OPTIONS_TABLE_COLOUR,
 	  .scope = OPTIONS_TABLE_SESSION,
-	  .default_num = 6,
+	  .default_num = -1,
 	  .text = "Colour of the cursor when in the command prompt."
 	},
 
@@ -953,6 +975,15 @@ const struct options_table_entry options_table[] = {
 	  .choices = options_table_cursor_style_list,
 	  .default_num = 0,
 	  .text = "Style of the cursor when in the command prompt."
+	},
+
+	{ .name = "prompt-command-cursor-style",
+	  .type = OPTIONS_TABLE_CHOICE,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .choices = options_table_cursor_style_list,
+	  .default_num = 0,
+	  .text = "Style of the cursor in the command prompt when in command "
+		  "mode, if 'status-keys' is set to 'vi'."
 	},
 
 	{ .name = "session-status-current-style",
