@@ -101,4 +101,5 @@ int		 session_agent_is_coordinated(struct session_agent *);
 int		 session_agent_is_coordinator(struct session_agent *);
 const char	**session_agent_list_peers(struct session_agent *, int *);
 
+
 #endif /* SESSION_AGENT_H */

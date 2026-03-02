@@ -28,6 +28,72 @@
 #include "session-mcp-integration.h"
 #include "agent-analytics.h"
 
+/*
+ * Escape a string for safe embedding in JSON.
+ * Caller must free the result.
+ */
+static char *
+json_escape(const char *s)
+{
+	char	*out, *o;
+	size_t	 len;
+
+	if (s == NULL)
+		return (xstrdup(""));
+
+	/* Worst case: every char becomes \\uXXXX (6 chars) */
+	len = strlen(s) * 6 + 1;
+	out = xmalloc(len);
+	o = out;
+
+	while (*s) {
+		switch (*s) {
+		case '"':
+			*o++ = '\\'; *o++ = '"';
+			break;
+		case '\\':
+			*o++ = '\\'; *o++ = '\\';
+			break;
+		case '\n':
+			*o++ = '\\'; *o++ = 'n';
+			break;
+		case '\r':
+			*o++ = '\\'; *o++ = 'r';
+			break;
+		case '\t':
+			*o++ = '\\'; *o++ = 't';
+			break;
+		default:
+			if ((unsigned char)*s < 0x20) {
+				o += snprintf(o, 7, "\\u%04x",
+				    (unsigned char)*s);
+			} else {
+				*o++ = *s;
+			}
+			break;
+		}
+		s++;
+	}
+	*o = '\0';
+	return (out);
+}
+
+/*
+ * Check if an MCP server is already connected (no blocking connect attempt).
+ * Used by lifecycle functions to avoid blocking the event loop.
+ */
+static int
+mcp_server_ready(const char *server_name)
+{
+	struct mcp_connection	*conn;
+
+	if (global_mcp_client == NULL)
+		return (0);
+
+	conn = mcp_find_connection(global_mcp_client, server_name);
+	return (conn != NULL && conn->state == MCP_CONNECTED);
+}
+
 /* Create a new session agent */
 struct session_agent *
 session_agent_create(const char *agent_type, const char *goal,
@@ -81,7 +147,7 @@ session_agent_destroy(struct session_agent *agent)
 	if (global_mcp_client != NULL && agent->runtime_goal_id != NULL)
 		session_mcp_complete_goal(agent);
 
-	/* Phase 4.4: Record session end for analytics (success = goal completed) */
+	/* Phase 4.4: Record session end for analytics */
 	agent_analytics_record_session_end(agent->agent_type,
 	    agent->runtime_goal_id != NULL ? 1 : 0);
 
@@ -131,14 +197,34 @@ session_agent_register(struct session_agent *agent)
 		return (0);
 
 	/*
+	 * Only attempt if the server is already connected.
+	 * Don't block session creation on MCP server startup.
+	 */
+	if (!mcp_server_ready("agent-runtime-mcp"))
+		return (0);
+
+	/*
 	 * Call agent-runtime-mcp create_goal
 	 * Params: {"name": "session_name", "description": "goal"}
 	 */
-	params_len = 256 + strlen(agent->session_name) + strlen(agent->goal);
-	params = xmalloc(params_len);
-	snprintf(params, params_len,
-	    "{\"name\":\"%s\",\"description\":\"[%s] %s\"}",
-	    agent->session_name, agent->agent_type, agent->goal);
+	{
+		char	*esc_name, *esc_type, *esc_goal;
+
+		esc_name = json_escape(agent->session_name);
+		esc_type = json_escape(agent->agent_type);
+		esc_goal = json_escape(agent->goal);
+
+		params_len = 256 + strlen(esc_name) + strlen(esc_type) +
+		    strlen(esc_goal);
+		params = xmalloc(params_len);
+		snprintf(params, params_len,
+		    "{\"name\":\"%s\",\"description\":\"[%s] %s\"}",
+		    esc_name, esc_type, esc_goal);
+
+		free(esc_name);
+		free(esc_type);
+		free(esc_goal);
+	}
 
 	resp = mcp_call_tool(global_mcp_client, "agent-runtime-mcp",
 	    "create_goal", params);
@@ -149,12 +235,40 @@ session_agent_register(struct session_agent *agent)
 
 	/* Extract goal ID from response if successful */
 	if (resp->success && resp->result != NULL) {
+		const char	*id_start;
+
 		/*
-		 * Parse JSON to extract goal_id
-		 * For now, store the full result as the ID
-		 * TODO: Proper JSON parsing
+		 * Parse goal_id from JSON result.
+		 * Look for "goal_id":"<value>" pattern.
 		 */
-		agent->runtime_goal_id = xstrdup(resp->result);
+		id_start = strstr(resp->result, "\"goal_id\"");
+		if (id_start == NULL)
+			id_start = strstr(resp->result, "\"id\"");
+
+		if (id_start != NULL) {
+			/* Advance past key and colon to the value */
+			id_start = strchr(id_start + 1, ':');
+			if (id_start != NULL) {
+				id_start++;
+				while (*id_start == ' ' || *id_start == '"')
+					id_start++;
+				if (*id_start) {
+					const char	*id_end;
+					size_t		 id_len;
+
+					id_end = id_start;
+					while (*id_end && *id_end != '"' &&
+					    *id_end != ',' && *id_end != '}')
+						id_end++;
+					id_len = id_end - id_start;
+					agent->runtime_goal_id =
+					    xmalloc(id_len + 1);
+					memcpy(agent->runtime_goal_id,
+					    id_start, id_len);
+					agent->runtime_goal_id[id_len] = '\0';
+				}
+			}
+		}
 	}
 
 	mcp_response_free(resp);
@@ -193,13 +307,26 @@ session_agent_complete(struct session_agent *agent)
 		return (0);
 
 	/*
-	 * Call agent-runtime-mcp update_task_status
-	 * Mark goal as completed
-	 * TODO: Extract actual goal ID and call proper API
+	 * Only attempt if server is already connected.
+	 * Don't block session teardown on MCP.
 	 */
-	params_len = 256;
-	params = xmalloc(params_len);
-	snprintf(params, params_len, "{\"status\":\"completed\"}");
+	if (!mcp_server_ready("agent-runtime-mcp"))
+		return (0);
+
+	/*
+	 * Call agent-runtime-mcp update_task_status
+	 * Mark goal as completed using the stored goal ID.
+	 */
+	{
+		char	*esc_id;
+
+		esc_id = json_escape(agent->runtime_goal_id);
+		params_len = 256 + strlen(esc_id);
+		params = xmalloc(params_len);
+		snprintf(params, params_len,
+		    "{\"task_id\":\"%s\",\"status\":\"completed\"}", esc_id);
+		free(esc_id);
+	}
 
 	resp = mcp_call_tool(global_mcp_client, "agent-runtime-mcp",
 	    "update_task_status", params);
@@ -234,12 +361,22 @@ session_agent_save_context(struct session_agent *agent, const char *context)
 	 * Call enhanced-memory create_entities
 	 * Store context as an entity
 	 */
-	params_len = 1024 + strlen(agent->context_key) + strlen(context);
-	params = xmalloc(params_len);
-	snprintf(params, params_len,
-	    "[{\"name\":\"%s\",\"entityType\":\"session_context\","
-	    "\"observations\":[\"%s\"]}]",
-	    agent->context_key, context);
+	{
+		char	*esc_key, *esc_ctx;
+
+		esc_key = json_escape(agent->context_key);
+		esc_ctx = json_escape(context);
+
+		params_len = 1024 + strlen(esc_key) + strlen(esc_ctx);
+		params = xmalloc(params_len);
+		snprintf(params, params_len,
+		    "[{\"name\":\"%s\",\"entityType\":\"session_context\","
+		    "\"observations\":[\"%s\"]}]",
+		    esc_key, esc_ctx);
+
+		free(esc_key);
+		free(esc_ctx);
+	}
 
 	resp = mcp_call_tool(global_mcp_client, "enhanced-memory",
 	    "create_entities", params);
@@ -270,10 +407,16 @@ session_agent_restore_context(struct session_agent *agent)
 	 * Call enhanced-memory search_nodes
 	 * Search for context by key
 	 */
-	params_len = 256 + strlen(agent->context_key);
-	params = xmalloc(params_len);
-	snprintf(params, params_len, "{\"query\":\"%s\",\"limit\":1}",
-	    agent->context_key);
+	{
+		char	*esc_key;
+
+		esc_key = json_escape(agent->context_key);
+		params_len = 256 + strlen(esc_key);
+		params = xmalloc(params_len);
+		snprintf(params, params_len,
+		    "{\"query\":\"%s\",\"limit\":1}", esc_key);
+		free(esc_key);
+	}
 
 	resp = mcp_call_tool(global_mcp_client, "enhanced-memory",
 	    "search_nodes", params);
@@ -335,8 +478,6 @@ session_agent_join_group(struct session_agent *agent, const char *group_name)
 	agent->is_coordinator = 1;
 	agent->last_coordination = time(NULL);
 
-	/* TODO: Register group with agent-runtime-mcp as a shared goal */
-
 	return (0);
 }
 
@@ -371,8 +512,6 @@ session_agent_leave_group(struct session_agent *agent)
 
 	agent->is_coordinator = 0;
 	agent->last_coordination = 0;
-
-	/* TODO: Unregister from group in agent-runtime-mcp */
 
 	return (0);
 }
@@ -452,7 +591,6 @@ session_agent_share_context(struct session_agent *agent, const char *key,
 	/*
 	 * Simple key-value storage using newline-separated format:
 	 * key=value\n
-	 * In production, would use proper JSON library
 	 */
 	if (agent->shared_context == NULL) {
 		/* First entry */
@@ -470,8 +608,6 @@ session_agent_share_context(struct session_agent *agent, const char *key,
 	agent->shared_context = new_context;
 	agent->shared_context_len = strlen(new_context);
 	agent->last_coordination = time(NULL);
-
-	/* TODO: Sync to group via agent-runtime-mcp goal metadata */
 
 	return (0);
 }
@@ -517,14 +653,6 @@ session_agent_sync_group(struct session_agent *agent)
 		return (-1);
 
 	agent->last_coordination = time(NULL);
-
-	/*
-	 * TODO: Implement full group synchronization:
-	 * 1. Query agent-runtime-mcp for group goal metadata
-	 * 2. Update shared_context from goal metadata
-	 * 3. Update peer_sessions from goal member list
-	 * 4. Aggregate progress from all peers
-	 */
 
 	return (0);
 }

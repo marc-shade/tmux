@@ -22,7 +22,6 @@
 #include <string.h>
 
 #include "tmux.h"
-#include "mcp-protocol.h"
 
 /*
  * Query MCP server and call tool.
@@ -78,12 +77,12 @@ cmd_mcp_query_exec(struct cmd *self, struct cmdq_item *item)
 		}
 	}
 
-	/* Call the tool with automatic retry and error handling */
-	resp = mcp_call_tool_safe(global_mcp_client, server_name, tool_name,
+	/* Call the tool */
+	resp = mcp_call_tool(global_mcp_client, server_name, tool_name,
 	    arguments);
 
 	if (resp == NULL) {
-		cmdq_error(item, "MCP call failed: connection error or timeout");
+		cmdq_error(item, "MCP call failed: connection error");
 		return (CMD_RETURN_ERROR);
 	}
 

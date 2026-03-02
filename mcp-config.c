@@ -18,6 +18,7 @@
 
 #include <sys/types.h>
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,170 +28,272 @@
 #include "mcp-client.h"
 #include "mcp-config.h"
 
-#define MAX_LINE_LEN 4096
 #define MAX_ARGS 64
 
 /*
- * Parse a single line from config helper output.
- * Format: "key=value"
- * Returns key and value pointers (both must be freed by caller).
+ * Minimal JSON string extractor.
+ * Given a pointer at or before a quoted string, extract and return the value.
+ * Advances *pos past the closing quote.  Caller must free the result.
+ */
+static char *
+json_extract_string(const char **pos)
+{
+	const char	*p = *pos;
+	const char	*start;
+	size_t		 len;
+	char		*result;
+
+	/* Find opening quote */
+	while (*p && *p != '"')
+		p++;
+	if (*p != '"')
+		return (NULL);
+	p++;
+	start = p;
+
+	/* Find closing quote (skip escaped chars) */
+	while (*p && *p != '"') {
+		if (*p == '\\' && *(p + 1))
+			p++;
+		p++;
+	}
+	if (*p != '"')
+		return (NULL);
+
+	len = p - start;
+	result = xmalloc(len + 1);
+	memcpy(result, start, len);
+	result[len] = '\0';
+
+	*pos = p + 1;
+	return (result);
+}
+
+/*
+ * Skip whitespace and the given character.
+ */
+static const char *
+json_skip(const char *p, char c)
+{
+	while (*p && (isspace((unsigned char)*p) || *p == c))
+		p++;
+	return (p);
+}
+
+/*
+ * Find the value for a JSON key in an object.
+ * Returns pointer to start of value (after the colon).
+ */
+static const char *
+json_find_key(const char *json, const char *key)
+{
+	char		 search[256];
+	const char	*p;
+
+	snprintf(search, sizeof search, "\"%s\"", key);
+	p = strstr(json, search);
+	if (p == NULL)
+		return (NULL);
+
+	p += strlen(search);
+	/* Skip whitespace and colon */
+	while (*p && (isspace((unsigned char)*p) || *p == ':'))
+		p++;
+	return (p);
+}
+
+/*
+ * Find matching closing brace/bracket, accounting for nesting.
+ */
+static const char *
+json_find_close(const char *p, char open, char close)
+{
+	int	depth = 1;
+
+	p++; /* skip opening char */
+	while (*p && depth > 0) {
+		if (*p == '"') {
+			/* Skip strings (they may contain braces) */
+			p++;
+			while (*p && *p != '"') {
+				if (*p == '\\' && *(p + 1))
+					p++;
+				p++;
+			}
+		} else if (*p == open) {
+			depth++;
+		} else if (*p == close) {
+			depth--;
+		}
+		if (*p)
+			p++;
+	}
+	return (p);
+}
+
+/*
+ * Parse a single MCP server entry from JSON and add it to the client.
+ * server_json points to the opening { of the server config object.
+ * Returns 0 on success, -1 on error.
  */
 static int
-parse_line(const char *line, char **key, char **value)
+parse_server_entry(struct mcp_client *client, const char *name,
+    const char *server_json)
 {
-	const char	*eq;
-	size_t		 key_len;
+	struct mcp_server_config	*config;
+	const char			*p, *arr_start, *arr_end;
+	char				*args[MAX_ARGS];
+	int				 argc = 0;
+	int				 i;
 
-	*key = NULL;
-	*value = NULL;
+	config = xcalloc(1, sizeof *config);
+	config->name = xstrdup(name);
+	config->transport = MCP_TRANSPORT_STDIO;
+	config->auto_start = 1;
 
-	/* Find equals sign */
-	eq = strchr(line, '=');
-	if (eq == NULL)
+	/* Extract "command" */
+	p = json_find_key(server_json, "command");
+	if (p != NULL && *p == '"')
+		config->command = json_extract_string(&p);
+
+	if (config->command == NULL) {
+		free(config->name);
+		free(config);
 		return (-1);
+	}
 
-	/* Extract key */
-	key_len = eq - line;
-	if (key_len == 0)
+	/* Extract "args" array */
+	p = json_find_key(server_json, "args");
+	if (p != NULL && *p == '[') {
+		arr_start = p + 1;
+		arr_end = json_find_close(p, '[', ']');
+
+		p = arr_start;
+		while (p < arr_end && argc < MAX_ARGS) {
+			/* Find next string in array */
+			while (p < arr_end && *p != '"')
+				p++;
+			if (p >= arr_end || *p != '"')
+				break;
+			args[argc] = json_extract_string(&p);
+			if (args[argc] != NULL)
+				argc++;
+		}
+	}
+
+	/* Build args array for execv: [command, arg1, ..., NULL] */
+	config->args = xmalloc((argc + 2) * sizeof(char *));
+	config->args[0] = xstrdup(config->command);
+	for (i = 0; i < argc; i++)
+		config->args[i + 1] = args[i];
+	config->args[argc + 1] = NULL;
+
+	if (mcp_add_server(client, config) < 0) {
+		/* Clean up on failure */
+		for (i = 0; i < argc; i++)
+			free(args[i]);
+		free(config->args[0]);
+		free(config->args);
+		free(config->command);
+		free(config->name);
+		free(config);
 		return (-1);
-
-	*key = xmalloc(key_len + 1);
-	memcpy(*key, line, key_len);
-	(*key)[key_len] = '\0';
-
-	/* Extract value */
-	*value = xstrdup(eq + 1);
+	}
 
 	return (0);
 }
 
 /*
- * Load MCP servers from config file using Python helper.
+ * Load MCP servers from a JSON config file.
  * Returns number of servers loaded, or -1 on error.
  */
 int
 mcp_load_config_from_file(struct mcp_client *client, const char *config_path)
 {
-	FILE			*fp;
-	char			 line[MAX_LINE_LEN];
-	char			*key, *value;
-	char			 cmd[MAX_LINE_LEN];
-	int			 servers_loaded = 0;
+	FILE		*fp;
+	char		*data = NULL;
+	size_t		 data_len = 0, data_cap = 0;
+	char		 buf[4096];
+	size_t		 n;
+	const char	*servers_obj, *p, *server_start;
+	char		*server_name;
+	int		 loaded = 0;
 
-	/* Current server being parsed */
-	struct mcp_server_config	*server = NULL;
-	char				*args[MAX_ARGS];
-	int				 args_count = 0;
-
-	/* Build command to run helper script */
-	if (config_path != NULL) {
-		/* Not implemented: custom config path */
+	if (client == NULL || config_path == NULL)
 		return (-1);
-	}
 
-	/* Use default ~/.claude.json via helper script */
-	snprintf(cmd, sizeof cmd, "%s/mcp-config-helper.py",
-	    TMUX_CONF);  /* Placeholder - use build dir for now */
-
-	/* Use permanent installation path */
-	snprintf(cmd, sizeof cmd, "/Volumes/FILES/code/tmux/mcp-config-helper.py");
-
-	fp = popen(cmd, "r");
+	fp = fopen(config_path, "r");
 	if (fp == NULL)
 		return (-1);
 
-	/* Parse helper output */
-	while (fgets(line, sizeof line, fp) != NULL) {
-		/* Remove trailing newline */
-		line[strcspn(line, "\n")] = '\0';
-
-		/* Skip empty lines */
-		if (line[0] == '\0')
-			continue;
-
-		/* Check for section markers */
-		if (strcmp(line, "SERVER_START") == 0) {
-			/* Start new server config */
-			if (server != NULL) {
-				/* This shouldn't happen - missing SERVER_END */
-				free(server->name);
-				free(server->command);
-				free(server);
-			}
-
-			server = xmalloc(sizeof *server);
-			memset(server, 0, sizeof *server);
-			server->transport = MCP_TRANSPORT_STDIO;
-			server->socket_path = NULL;
-			server->auto_start = 1;
-			args_count = 0;
-
-			continue;
+	/* Read entire file into memory */
+	while ((n = fread(buf, 1, sizeof buf, fp)) > 0) {
+		if (data_len + n >= data_cap) {
+			data_cap = (data_cap == 0) ? 8192 : data_cap * 2;
+			data = xrealloc(data, data_cap);
 		}
+		memcpy(data + data_len, buf, n);
+		data_len += n;
+	}
+	fclose(fp);
 
-		if (strcmp(line, "SERVER_END") == 0) {
-			/* Finish server config and add to client */
-			if (server == NULL)
-				continue;
+	if (data_len == 0) {
+		free(data);
+		return (0);
+	}
+	data[data_len] = '\0';
 
-			/*
-			 * Build args array for execv().
-			 * args[0] must be the command itself.
-			 */
-			if (args_count > 0 && server->command != NULL) {
-				int	i;
-
-				server->args = xmalloc((args_count + 2) *
-				    sizeof(char *));
-				server->args[0] = xstrdup(server->command);
-				for (i = 0; i < args_count; i++)
-					server->args[i + 1] = args[i];
-				server->args[args_count + 1] = NULL;
-			} else if (server->command != NULL) {
-				/* No args, just command */
-				server->args = xmalloc(2 * sizeof(char *));
-				server->args[0] = xstrdup(server->command);
-				server->args[1] = NULL;
-			} else {
-				server->args = NULL;
-			}
-
-			/* Add server to client */
-			if (mcp_add_server(client, server) == 0)
-				servers_loaded++;
-
-			server = NULL;
-			args_count = 0;
-			continue;
-		}
-
-		/* Parse key=value line */
-		if (server == NULL)
-			continue;
-
-		if (parse_line(line, &key, &value) < 0)
-			continue;
-
-		/* Process based on key */
-		if (strcmp(key, "name") == 0) {
-			server->name = xstrdup(value);
-		} else if (strcmp(key, "command") == 0) {
-			server->command = xstrdup(value);
-		} else if (strcmp(key, "arg") == 0) {
-			/* Add to args array */
-			if (args_count < MAX_ARGS - 1) {
-				args[args_count] = xstrdup(value);
-				args_count++;
-			}
-		}
-
-		free(key);
-		free(value);
+	/* Find "mcpServers" object */
+	servers_obj = json_find_key(data, "mcpServers");
+	if (servers_obj == NULL || *servers_obj != '{') {
+		free(data);
+		return (0);
 	}
 
-	pclose(fp);
+	/* Iterate over server entries in the mcpServers object */
+	p = servers_obj + 1; /* skip opening { */
+	while (*p) {
+		/* Skip whitespace */
+		while (*p && isspace((unsigned char)*p))
+			p++;
 
-	return (servers_loaded);
+		if (*p == '}')
+			break; /* end of mcpServers */
+
+		if (*p == ',') {
+			p++;
+			continue;
+		}
+
+		/* Expect a quoted key (server name) */
+		if (*p != '"')
+			break;
+
+		server_name = json_extract_string(&p);
+		if (server_name == NULL)
+			break;
+
+		/* Skip colon */
+		p = json_skip(p, ':');
+
+		/* Expect server config object */
+		if (*p != '{') {
+			free(server_name);
+			break;
+		}
+
+		server_start = p;
+		p = json_find_close(p, '{', '}');
+
+		if (parse_server_entry(client, server_name,
+		    server_start) == 0)
+			loaded++;
+
+		free(server_name);
+	}
+
+	free(data);
+	return (loaded);
 }
 
 /*
@@ -199,5 +302,8 @@ mcp_load_config_from_file(struct mcp_client *client, const char *config_path)
 int
 mcp_load_config(struct mcp_client *client)
 {
-	return mcp_load_config_from_file(client, NULL);
+	char	path[1024];
+
+	snprintf(path, sizeof path, "%s/.claude.json", find_home());
+	return (mcp_load_config_from_file(client, path));
 }
