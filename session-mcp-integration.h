@@ -27,6 +27,9 @@
 
 /* Enhanced-memory integration */
 int	session_mcp_save_to_memory(struct session_agent *, struct session *);
+int	session_mcp_save_smart_context(struct session_agent *, struct session *);
+int	session_mcp_capture_pane_context(struct session_agent *, struct session *);
+float	session_mcp_get_context_relevance(struct session *, struct session_agent *);
 struct mcp_response	*session_mcp_find_similar(struct session_agent *);
 
 /* Agent-runtime-mcp integration */

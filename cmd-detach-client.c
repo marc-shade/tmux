@@ -90,6 +90,10 @@ cmd_detach_client_exec(struct cmd *self, struct cmdq_item *item)
 
 			/* Save to enhanced-memory via MCP */
 			session_mcp_save_to_memory(s->agent_metadata, s);
+
+			/* Capture pane scrollback content */
+			session_mcp_capture_pane_context(
+			    s->agent_metadata, s);
 		}
 
 		TAILQ_FOREACH(loop, &clients, entry) {
@@ -124,7 +128,12 @@ cmd_detach_client_exec(struct cmd *self, struct cmdq_item *item)
 		session_agent_save_context(tc->session->agent_metadata, context);
 
 		/* Save to enhanced-memory via MCP */
-		session_mcp_save_to_memory(tc->session->agent_metadata, tc->session);
+		session_mcp_save_to_memory(tc->session->agent_metadata,
+		    tc->session);
+
+		/* Capture pane scrollback content */
+		session_mcp_capture_pane_context(
+		    tc->session->agent_metadata, tc->session);
 	}
 
 	if (cmd != NULL)

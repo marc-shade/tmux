@@ -2560,6 +2560,109 @@ format_cb_sixel_support(__unused struct format_tree *ft)
 #endif
 }
 
+/* Callback for agent_context_saved. */
+static void *
+format_cb_agent_context_saved(struct format_tree *ft)
+{
+	if (ft->s != NULL && ft->s->agent_metadata != NULL)
+		return (xstrdup(ft->s->agent_metadata->context_saved ? "1" : "0"));
+	return (NULL);
+}
+
+/* Callback for agent_duration. */
+static void *
+format_cb_agent_duration(struct format_tree *ft)
+{
+	time_t	 duration;
+	int	 hours, minutes;
+
+	if (ft->s != NULL && ft->s->agent_metadata != NULL) {
+		duration = time(NULL) - ft->s->agent_metadata->created;
+		hours = (int)(duration / 3600);
+		minutes = (int)((duration % 3600) / 60);
+		if (hours > 0)
+			return (format_printf("%dh%dm", hours, minutes));
+		return (format_printf("%dm", minutes));
+	}
+	return (NULL);
+}
+
+/* Callback for agent_goal. */
+static void *
+format_cb_agent_goal(struct format_tree *ft)
+{
+	if (ft->s != NULL && ft->s->agent_metadata != NULL &&
+	    ft->s->agent_metadata->goal != NULL)
+		return (xstrdup(ft->s->agent_metadata->goal));
+	return (NULL);
+}
+
+/* Callback for agent_group. */
+static void *
+format_cb_agent_group(struct format_tree *ft)
+{
+	if (ft->s != NULL && ft->s->agent_metadata != NULL &&
+	    ft->s->agent_metadata->coordination_group != NULL)
+		return (xstrdup(ft->s->agent_metadata->coordination_group));
+	return (NULL);
+}
+
+/* Callback for agent_interactions. */
+static void *
+format_cb_agent_interactions(struct format_tree *ft)
+{
+	if (ft->s != NULL && ft->s->agent_metadata != NULL)
+		return (format_printf("%u", ft->s->agent_metadata->interactions));
+	return (NULL);
+}
+
+/* Callback for agent_is_coordinator. */
+static void *
+format_cb_agent_is_coordinator(struct format_tree *ft)
+{
+	if (ft->s != NULL && ft->s->agent_metadata != NULL)
+		return (xstrdup(ft->s->agent_metadata->is_coordinator ? "1" : "0"));
+	return (NULL);
+}
+
+/* Callback for agent_peers. */
+static void *
+format_cb_agent_peers(struct format_tree *ft)
+{
+	if (ft->s != NULL && ft->s->agent_metadata != NULL)
+		return (format_printf("%d", ft->s->agent_metadata->num_peers));
+	return (NULL);
+}
+
+/* Callback for agent_runtime_id. */
+static void *
+format_cb_agent_runtime_id(struct format_tree *ft)
+{
+	if (ft->s != NULL && ft->s->agent_metadata != NULL &&
+	    ft->s->agent_metadata->runtime_goal_id != NULL)
+		return (xstrdup(ft->s->agent_metadata->runtime_goal_id));
+	return (NULL);
+}
+
+/* Callback for agent_tasks. */
+static void *
+format_cb_agent_tasks(struct format_tree *ft)
+{
+	if (ft->s != NULL && ft->s->agent_metadata != NULL)
+		return (format_printf("%u", ft->s->agent_metadata->tasks_completed));
+	return (NULL);
+}
+
+/* Callback for agent_type. */
+static void *
+format_cb_agent_type(struct format_tree *ft)
+{
+	if (ft->s != NULL && ft->s->agent_metadata != NULL &&
+	    ft->s->agent_metadata->agent_type != NULL)
+		return (xstrdup(ft->s->agent_metadata->agent_type));
+	return (NULL);
+}
+
 /* Callback for active_window_index. */
 static void *
 format_cb_active_window_index(struct format_tree *ft)
@@ -3028,6 +3131,36 @@ struct format_table_entry {
 static const struct format_table_entry format_table[] = {
 	{ "active_window_index", FORMAT_TABLE_STRING,
 	  format_cb_active_window_index
+	},
+	{ "agent_context_saved", FORMAT_TABLE_STRING,
+	  format_cb_agent_context_saved
+	},
+	{ "agent_duration", FORMAT_TABLE_STRING,
+	  format_cb_agent_duration
+	},
+	{ "agent_goal", FORMAT_TABLE_STRING,
+	  format_cb_agent_goal
+	},
+	{ "agent_group", FORMAT_TABLE_STRING,
+	  format_cb_agent_group
+	},
+	{ "agent_interactions", FORMAT_TABLE_STRING,
+	  format_cb_agent_interactions
+	},
+	{ "agent_is_coordinator", FORMAT_TABLE_STRING,
+	  format_cb_agent_is_coordinator
+	},
+	{ "agent_peers", FORMAT_TABLE_STRING,
+	  format_cb_agent_peers
+	},
+	{ "agent_runtime_id", FORMAT_TABLE_STRING,
+	  format_cb_agent_runtime_id
+	},
+	{ "agent_tasks", FORMAT_TABLE_STRING,
+	  format_cb_agent_tasks
+	},
+	{ "agent_type", FORMAT_TABLE_STRING,
+	  format_cb_agent_type
 	},
 	{ "alternate_on", FORMAT_TABLE_STRING,
 	  format_cb_alternate_on
