@@ -26,6 +26,7 @@
 #include <unistd.h>
 
 #include "tmux.h"
+#include "session-mcp-integration.h"
 
 /*
  * Create a new session and attach to the current terminal unless -d is given.
@@ -297,8 +298,12 @@ cmd_new_session_exec(struct cmd *self, struct cmdq_item *item)
 		s->agent_metadata = session_agent_create(agent_type, goal, s->name);
 
 		/* Register with agent-runtime-mcp */
-		if (global_mcp_client != NULL)
+		if (global_mcp_client != NULL) {
 			session_agent_register(s->agent_metadata);
+
+			/* Register goal with agent-runtime-mcp via MCP */
+			session_mcp_register_goal(s->agent_metadata);
+		}
 	}
 
 	/* Spawn the initial window. */

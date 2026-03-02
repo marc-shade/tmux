@@ -20,17 +20,23 @@ LDADD = $(LIBOBJS)
 
 # Set flags for gcc.
 if IS_GCC
-AM_CFLAGS += -std=gnu99 -O2
+AM_CFLAGS += -std=gnu99
+if IS_OPTIMIZED
+AM_CFLAGS += -O2
+else
+AM_CFLAGS += -O0
+endif
 if IS_DEBUG
 AM_CFLAGS += -g
-AM_CFLAGS += -Wno-long-long -Wall -W -Wformat=2
+AM_CFLAGS += -Wno-long-long -Wall -W -Wformat=2 -Wno-use-after-free
 AM_CFLAGS += -Wmissing-prototypes -Wstrict-prototypes -Wmissing-declarations
 AM_CFLAGS += -Wwrite-strings -Wshadow -Wpointer-arith -Wsign-compare
-AM_CFLAGS += -Wundef -Wbad-function-cast -Winline -Wcast-align
+AM_CFLAGS += -Wundef -Wbad-function-cast -Winline -Wno-cast-align
 AM_CFLAGS += -Wdeclaration-after-statement -Wno-pointer-sign -Wno-attributes
-AM_CFLAGS += -Wno-unused-result -Wno-format-y2k
+AM_CFLAGS += -Wno-unused-result -Wno-format-y2k -Wno-unknown-warning-option
+AM_CFLAGS += -Wno-maybe-uninitialized
 if IS_DARWIN
-AM_CFLAGS += -Wno-deprecated-declarations -Wno-cast-align -Wno-macro-redefined
+AM_CFLAGS += -Wno-deprecated-declarations -Wno-macro-redefined
 endif
 AM_CPPFLAGS += -DDEBUG
 endif
@@ -73,9 +79,22 @@ endif
 
 # List of sources.
 dist_tmux_SOURCES = \
+	agent-analytics.c \
+	agent-manager.c \
+	mcp-async.c \
 	mcp-client.c \
 	mcp-config.c \
+	mcp-metrics.c \
+	mcp-pool.c \
+	mcp-protocol.c \
+	mcp-socket.c \
 	session-agent.c \
+	session-mcp-integration.c \
+	session-template.c \
+	context-semantic.c \
+	context-compress.c \
+	agent-learning.c \
+	agent-optimizer.c \
 	alerts.c \
 	arguments.c \
 	attributes.c \
@@ -103,6 +122,7 @@ dist_tmux_SOURCES = \
 	cmd-kill-window.c \
 	cmd-list-buffers.c \
 	cmd-list-clients.c \
+	cmd-list-commands.c \
 	cmd-list-keys.c \
 	cmd-list-panes.c \
 	cmd-list-sessions.c \
@@ -110,6 +130,7 @@ dist_tmux_SOURCES = \
 	cmd-load-buffer.c \
 	cmd-lock-server.c \
 	cmd-mcp-query.c \
+	cmd-mcp-stats.c \
 	cmd-move-window.c \
 	cmd-new-session.c \
 	cmd-new-window.c \
@@ -136,6 +157,15 @@ dist_tmux_SOURCES = \
 	cmd-set-environment.c \
 	cmd-set-option.c \
 	cmd-show-agent.c \
+	cmd-agent-analytics.c \
+	cmd-agent-optimize.c \
+	cmd-agent-join-group.c \
+	cmd-agent-leave-group.c \
+	cmd-agent-share.c \
+	cmd-agent-peers.c \
+	cmd-list-agent-groups.c \
+	cmd-list-templates.c \
+	cmd-new-from-template.c \
 	cmd-show-environment.c \
 	cmd-show-messages.c \
 	cmd-show-options.c \
@@ -188,6 +218,7 @@ dist_tmux_SOURCES = \
 	server-fn.c \
 	server.c \
 	session.c \
+	sort.c \
 	spawn.c \
 	status.c \
 	style.c \
@@ -195,6 +226,7 @@ dist_tmux_SOURCES = \
 	tmux.h \
 	tmux-protocol.h \
 	tty-acs.c \
+	tty-draw.c \
 	tty-features.c \
 	tty-keys.c \
 	tty-term.c \

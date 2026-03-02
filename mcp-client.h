@@ -116,9 +116,19 @@ struct mcp_connection	*mcp_find_connection(struct mcp_client *, const char *);
 /* Communication */
 struct mcp_response	*mcp_call_tool(struct mcp_client *, const char *,
 				const char *, const char *);
+struct mcp_response	*mcp_list_tools(struct mcp_client *, const char *);
 void			mcp_response_free(struct mcp_response *);
 
-/* Status */
+/* Status and health */
+int			mcp_connection_healthy(struct mcp_connection *);
 const char		*mcp_state_string(enum mcp_state);
+
+/* JSON-RPC helpers (used by protocol extensions) */
+char			*mcp_build_request(int, const char *, const char *);
+struct mcp_response	*mcp_parse_response(const char *);
+
+/* Low-level transport (for protocol extensions) */
+ssize_t			mcp_send(struct mcp_connection *, const char *, size_t);
+ssize_t			mcp_recv(struct mcp_connection *, char *, size_t);
 
 #endif /* MCP_CLIENT_H */

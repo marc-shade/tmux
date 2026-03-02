@@ -72,6 +72,7 @@ extern const struct cmd_entry cmd_lock_session_entry;
 extern const struct cmd_entry cmd_move_pane_entry;
 extern const struct cmd_entry cmd_move_window_entry;
 extern const struct cmd_entry cmd_mcp_query_entry;
+extern const struct cmd_entry cmd_mcp_stats_entry;
 extern const struct cmd_entry cmd_new_session_entry;
 extern const struct cmd_entry cmd_new_window_entry;
 extern const struct cmd_entry cmd_next_layout_entry;
@@ -102,6 +103,15 @@ extern const struct cmd_entry cmd_set_hook_entry;
 extern const struct cmd_entry cmd_set_option_entry;
 extern const struct cmd_entry cmd_set_window_option_entry;
 extern const struct cmd_entry cmd_show_agent_entry;
+extern const struct cmd_entry cmd_agent_analytics_entry;
+extern const struct cmd_entry cmd_agent_optimize_entry;
+extern const struct cmd_entry cmd_agent_join_group_entry;
+extern const struct cmd_entry cmd_agent_leave_group_entry;
+extern const struct cmd_entry cmd_agent_share_entry;
+extern const struct cmd_entry cmd_agent_peers_entry;
+extern const struct cmd_entry cmd_list_agent_groups_entry;
+extern const struct cmd_entry cmd_list_templates_entry;
+extern const struct cmd_entry cmd_new_from_template_entry;
 extern const struct cmd_entry cmd_show_buffer_entry;
 extern const struct cmd_entry cmd_show_environment_entry;
 extern const struct cmd_entry cmd_show_hooks_entry;
@@ -166,6 +176,7 @@ const struct cmd_entry *cmd_table[] = {
 	&cmd_move_pane_entry,
 	&cmd_move_window_entry,
 	&cmd_mcp_query_entry,
+	&cmd_mcp_stats_entry,
 	&cmd_new_session_entry,
 	&cmd_new_window_entry,
 	&cmd_next_layout_entry,
@@ -196,6 +207,15 @@ const struct cmd_entry *cmd_table[] = {
 	&cmd_set_option_entry,
 	&cmd_set_window_option_entry,
 	&cmd_show_agent_entry,
+	&cmd_agent_analytics_entry,
+	&cmd_agent_optimize_entry,
+	&cmd_agent_join_group_entry,
+	&cmd_agent_leave_group_entry,
+	&cmd_agent_share_entry,
+	&cmd_agent_peers_entry,
+	&cmd_list_agent_groups_entry,
+	&cmd_list_templates_entry,
+	&cmd_new_from_template_entry,
 	&cmd_show_buffer_entry,
 	&cmd_show_environment_entry,
 	&cmd_show_hooks_entry,
@@ -224,6 +244,7 @@ struct cmd {
 
 	char			 *file;
 	u_int			  line;
+	int			  parse_flags;
 
 	TAILQ_ENTRY(cmd)	  qentry;
 };
@@ -416,6 +437,13 @@ cmd_get_source(struct cmd *cmd, const char **file, u_int *line)
 		*line = cmd->line;
 }
 
+/* Get parse flags for command. */
+int
+cmd_get_parse_flags(struct cmd *cmd)
+{
+	return (cmd->parse_flags);
+}
+
 /* Look for an alias for a command. */
 char *
 cmd_get_alias(const char *name)
@@ -500,7 +528,7 @@ ambiguous:
 /* Parse a single command from an argument vector. */
 struct cmd *
 cmd_parse(struct args_value *values, u_int count, const char *file, u_int line,
-    char **cause)
+    int parse_flags, char **cause)
 {
 	const struct cmd_entry	*entry;
 	struct cmd		*cmd;
@@ -529,6 +557,7 @@ cmd_parse(struct args_value *values, u_int count, const char *file, u_int line,
 	cmd = xcalloc(1, sizeof *cmd);
 	cmd->entry = entry;
 	cmd->args = args;
+	cmd->parse_flags = parse_flags;
 
 	if (file != NULL)
 		cmd->file = xstrdup(file);
@@ -671,11 +700,16 @@ cmd_list_copy(const struct cmd_list *cmdlist, int argc, char **argv)
 
 /* Get a command list as a string. */
 char *
-cmd_list_print(const struct cmd_list *cmdlist, int escaped)
+cmd_list_print(const struct cmd_list *cmdlist, int flags)
 {
 	struct cmd	*cmd, *next;
 	char		*buf, *this;
 	size_t		 len;
+	const char	*separator;
+	int		 escaped = flags & CMD_LIST_PRINT_ESCAPED;
+	int		 no_groups = flags & CMD_LIST_PRINT_NO_GROUPS;
+	const char	*single_separator = escaped ? " \\; " : " ; ";
+	const char	*double_separator = escaped ? " \\;\\; " : " ;; ";
 
 	len = 1;
 	buf = xcalloc(1, len);
@@ -690,17 +724,11 @@ cmd_list_print(const struct cmd_list *cmdlist, int escaped)
 
 		next = TAILQ_NEXT(cmd, qentry);
 		if (next != NULL) {
-			if (cmd->group != next->group) {
-				if (escaped)
-					strlcat(buf, " \\;\\; ", len);
-				else
-					strlcat(buf, " ;; ", len);
-			} else {
-				if (escaped)
-					strlcat(buf, " \\; ", len);
-				else
-					strlcat(buf, " ; ", len);
-			}
+			if (!no_groups && cmd->group != next->group)
+				separator = double_separator;
+			else
+				separator = single_separator;
+			strlcat(buf, separator, len);
 		}
 
 		free(this);

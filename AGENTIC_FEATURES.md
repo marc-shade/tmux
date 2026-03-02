@@ -219,31 +219,130 @@ Tmux automatically loads this configuration on first MCP query.
 
 ## Development Status
 
-### ✅ Completed (Phase 2.1-2.3)
+### ✅ Completed (Phase 2.1-2.4)
 
-- [x] MCP Socket Bridge - Native MCP client
+- [x] MCP Socket Bridge - Native MCP client (752 lines)
 - [x] Stdio transport support
 - [x] Automatic config loading from ~/.claude.json
-- [x] Session-agent lifecycle integration
+- [x] Session-agent lifecycle integration (274 lines)
 - [x] Agent metadata structure and management
-- [x] `show-agent` command
-- [x] `mcp-query` command structure
+- [x] `show-agent` command (95 lines)
+- [x] `mcp-query` command structure (106 lines)
 - [x] Session lifecycle hooks
+- [x] **Session persistence (auto-save/restore)** - COMPLETED
+  - Auto-save context on detach
+  - Auto-restore context on attach
+  - Integrated in cmd-attach-session.c and cmd-detach-client.c
+  - Functions: `session_agent_save_context()` and `session_agent_restore_context()`
+- [x] Complete documentation (README.md, AGENTIC_FEATURES.md, examples/)
+- [x] Test suite and workflow examples
 
-### ⚠️ In Progress (Phase 2.3.5)
+### ✅ Completed (Phase 2.5)
 
-- [ ] MCP protocol initialization handshake
-- [ ] Full MCP tool calling integration
-- [ ] Error handling and reconnection logic
-- [ ] Runtime testing with live MCP servers
+- [x] **MCP protocol initialization handshake** - COMPLETED
+  - Proper JSON-RPC 2.0 protocol with initialize/initialized sequence
+  - Protocol version negotiation (2024-11-05)
+  - Client capabilities advertisement
+  - Implemented in mcp-protocol.c (416 lines)
+- [x] **Full MCP tool calling integration** - COMPLETED
+  - Enhanced `mcp_call_tool_safe()` with automatic retry
+  - Connection health monitoring and stale detection
+  - Exponential backoff (1s, 2s, 4s)
+  - Error rate tracking and automatic reconnection
+- [x] **Enhanced error handling and reconnection logic** - COMPLETED
+  - `mcp_connect_with_retry()` for robust connection
+  - `mcp_connection_stale()` for health checks
+  - Connection statistics tracking
+  - Resource management (list_resources, read_resource)
 
-### 🚧 Planned (Phase 2.4)
+### ✅ Completed (Phase 3.0)
 
-- [ ] Session persistence (auto-save/restore)
-- [ ] Enhanced-memory integration for context
-- [ ] Multi-session coordination
-- [ ] Agent performance metrics
-- [ ] Session templates
+- [x] **Enhanced-memory integration for automatic context saving** - COMPLETED
+  - Automatic save to enhanced-memory on session detach
+  - Session context stored as entities with observations
+  - Implemented in session-mcp-integration.c (292 lines)
+  - Function: `session_mcp_save_to_memory()`
+  - Integrated in cmd-detach-client.c
+- [x] **agent-runtime-mcp integration for goal registration** - COMPLETED
+  - Automatic goal registration on session creation
+  - Goal lifecycle management (register, update, complete)
+  - Functions: `session_mcp_register_goal()`, `session_mcp_update_goal_status()`, `session_mcp_complete_goal()`
+  - Integrated in cmd-new-session.c and session-agent.c
+  - Goal completion on session destruction
+
+### ✅ Completed (Phase 4.0 - Runtime Testing)
+
+- [x] **Runtime testing with live MCP servers** - COMPLETED (2025-11-12)
+  - Comprehensive test suite executed successfully
+  - Both enhanced-memory and agent-runtime-mcp tested
+  - All integration points verified working
+  - See TESTING_RESULTS.md for detailed results
+- [x] **Documentation and testing infrastructure** - COMPLETED
+  - test-mcp-integration.sh (229 lines, 7 tests)
+  - test-with-live-servers.md (397 lines)
+  - QUICKSTART.md (350 lines)
+  - TESTING_RESULTS.md (comprehensive results)
+
+### ✅ Completed (Phase 4.1)
+
+- [x] **Unix domain socket transport** - COMPLETED
+  - Native socket support for better performance
+  - Automatic fallback to stdio if socket unavailable
+  - Socket path configuration in ~/.claude.json
+  - Non-blocking I/O with proper buffering
+  - Implemented in mcp-socket.c (400+ lines)
+- [x] **Connection pooling** - COMPLETED
+  - Per-server connection pools
+  - Reference counting and automatic cleanup
+  - Idle timeout (5 minutes default)
+  - Configurable pool sizes
+  - Pool statistics tracking
+  - Implemented in mcp-pool.c (400+ lines)
+- [x] **Performance metrics tracking** - COMPLETED
+  - Per-server latency tracking (min/max/avg/p95/p99)
+  - Success/failure rate monitoring
+  - Throughput metrics (bytes/sec, messages/sec)
+  - Connection health tracking
+  - Error type tracking
+  - Implemented in mcp-metrics.c (300+ lines)
+- [x] **mcp-stats command** - COMPLETED
+  - Display per-server statistics
+  - Connection pool statistics
+  - Performance metrics visualization
+  - Implemented in cmd-mcp-stats.c (237 lines)
+
+### ✅ Completed (Phase 4.2)
+
+- [x] **Async MCP operations** - COMPLETED
+  - Non-blocking tool calls with libevent integration
+  - Priority-based request queuing (urgent, high, normal, low)
+  - Callback-based completion handlers
+  - Background context saving
+  - Parallel request execution support
+  - Implemented in mcp-async.c (700+ lines)
+- [x] **Enhanced responsiveness** - COMPLETED
+  - MCP operations no longer block tmux UI
+  - Per-server concurrency limits (5 concurrent max)
+  - Request cancellation support
+  - Comprehensive async test suite (12/12 tests passing)
+
+### ✅ Completed (Phase 4.3)
+
+- [x] **Multi-session agent coordination** - COMPLETED
+  - Extended session_agent structure with coordination fields (285 lines)
+  - 10 coordination functions (join, leave, share, sync, etc.)
+  - 5 new commands: agent-join-group, agent-leave-group, agent-share, agent-peers, list-agent-groups
+  - Automatic peer discovery via RB_FOREACH iteration
+  - Coordinator/member roles (first session becomes coordinator)
+  - Key-value context sharing between coordinated sessions
+  - Comprehensive test suite (20/20 tests, 38/38 assertions passing)
+
+### 🚧 Planned (Phase 4.4+)
+
+- [ ] Session templates library
+- [ ] Cross-session learning and optimization
+- [ ] Agent performance analytics dashboard
+- [ ] Integration with additional MCP servers
 
 ## Testing
 

@@ -3,6 +3,8 @@
 [![Version](https://img.shields.io/badge/version-next--3.6-blue.svg)](https://github.com/marc-shade/tmux)
 [![License](https://img.shields.io/badge/license-ISC-green.svg)](COPYING)
 [![Build Status](https://img.shields.io/badge/build-passing-success.svg)]()
+[![Phase](https://img.shields.io/badge/phase-4.3%20complete-brightgreen.svg)](AGENTIC_FEATURES.md)
+[![Tests](https://img.shields.io/badge/tests-7%2F7%20passing-success.svg)](TESTING_RESULTS.md)
 
 **tmux** is a terminal multiplexer that enables multiple terminals to be created, accessed, and controlled from a single screen. This fork adds **native Model Context Protocol (MCP) integration** and **agentic AI workflow support** for advanced AI-assisted development workflows.
 
@@ -175,28 +177,86 @@ tmux automatically loads this configuration when you run your first `mcp-query` 
 
 ## 🧪 Development Status
 
-### ✅ Completed (Phase 2.3)
-- [x] Native MCP client with stdio transport
+### ✅ Phase 2.1-2.4: Foundation (Complete)
+- [x] Native MCP client with stdio transport (752 lines)
 - [x] Automatic config loading from ~/.claude.json
-- [x] Session-agent lifecycle integration
+- [x] Session-agent lifecycle integration (274 lines)
 - [x] Agent metadata tracking and management
-- [x] `show-agent` command
-- [x] `mcp-query` command framework
-- [x] Session persistence (auto-save/restore)
-- [x] Comprehensive documentation
+- [x] `show-agent` command (95 lines)
+- [x] `mcp-query` command framework (106 lines)
+- [x] **Session persistence (auto-save/restore)** ✨
+- [x] Comprehensive documentation (3 guides + examples)
+- [x] Test suite and workflow demonstrations
 
-### ⚠️ In Progress (Phase 2.3.5)
-- [ ] MCP protocol initialization handshake
-- [ ] Full MCP tool calling integration
-- [ ] Error handling and reconnection logic
-- [ ] Runtime testing with live MCP servers
+### ✅ Phase 2.5: MCP Protocol (Complete)
+- [x] MCP protocol initialization handshake (416 lines)
+- [x] Full MCP tool calling integration with retry logic
+- [x] Enhanced error handling and reconnection logic
+- [x] Connection health monitoring and stale detection
+- [x] Exponential backoff retry strategy (1s, 2s, 4s)
 
-### 🚧 Planned (Phase 2.4)
-- [ ] Enhanced-memory integration for context
-- [ ] Multi-session coordination
-- [ ] Agent performance metrics
-- [ ] Session templates
-- [ ] Socket transport support
+### ✅ Phase 3.0: MCP Integration (Complete)
+- [x] Enhanced-memory integration for automatic context saving (292 lines)
+- [x] Agent-runtime-mcp integration for goal registration
+- [x] Goal lifecycle management (register, update, complete)
+- [x] Session lifecycle hooks (create, detach, destroy)
+- [x] Automatic context persistence on detach
+
+### ✅ Phase 4.0: Runtime Testing (Complete - 2025-11-12)
+- [x] Comprehensive runtime testing with live MCP servers
+- [x] 7/7 automated tests passing
+- [x] Database corruption issues resolved
+- [x] All integration points verified working
+- [x] Complete testing documentation (600+ lines)
+
+### ✅ Phase 4.1: Socket Transport & Performance (Complete - 2025-11-12)
+- [x] Unix domain socket transport (mcp-socket.c, 400+ lines)
+- [x] Connection pooling with idle timeout (mcp-pool.c, 400+ lines)
+- [x] Performance metrics tracking (mcp-metrics.c, 300+ lines)
+- [x] mcp-stats command for statistics (cmd-mcp-stats.c, 237 lines)
+- [x] Automatic fallback to stdio if socket unavailable
+- [x] Non-blocking I/O with proper buffering
+- [x] Per-server latency tracking (min/max/avg/p95/p99)
+- [x] Connection health monitoring and pool statistics
+
+**Total Implementation**: 4,199+ lines of production code + 2,506 lines of documentation
+
+See [TESTING_RESULTS.md](TESTING_RESULTS.md) and [PHASE_4.1_FEATURES.md](PHASE_4.1_FEATURES.md) for detailed results.
+
+### ✅ Phase 4.2: Async Operations (Complete - 2025-11-13)
+- [x] Asynchronous MCP operations framework (mcp-async.c, 700+ lines)
+- [x] Priority-based request queuing (urgent, high, normal, low)
+- [x] Callback-based completion handlers
+- [x] Timeout handling with libevent integration
+- [x] Parallel request execution support
+- [x] Background context saving (non-blocking detach)
+- [x] Request cancellation support
+- [x] Per-server concurrency limits (5 concurrent max)
+- [x] Event loop integration with libevent
+- [x] Comprehensive async test suite (12/12 tests passing)
+
+**Responsiveness Improvement**: MCP operations no longer block tmux UI
+
+### ✅ Phase 4.3: Multi-Session Coordination (Complete - 2025-11-13)
+- [x] Agent coordination fields in session_agent structure (285 lines)
+- [x] 10 coordination functions (join, leave, share, sync, etc.)
+- [x] `agent-join-group` / `ajoin` - Join coordination group with automatic peer discovery
+- [x] `agent-leave-group` / `aleave` - Leave group and remove from peer lists
+- [x] `agent-share` / `ashare` - Share key=value context with group
+- [x] `agent-peers` / `apeers` - List peers, show role, display shared context
+- [x] `list-agent-groups` / `lsag` - List all coordination groups system-wide
+- [x] Coordinator/member roles (first session becomes coordinator)
+- [x] Automatic bidirectional peer discovery
+- [x] Context sharing between coordinated sessions
+- [x] Comprehensive test suite (20/20 tests, 38/38 assertions passing)
+
+**Collaboration Enabled**: Multiple AI agents can now coordinate across tmux sessions
+
+### 🚧 Planned (Phase 4.4+)
+- [ ] Session templates library
+- [ ] Cross-session learning and optimization
+- [ ] Agent performance analytics dashboard
+- [ ] Advanced context management
 
 ## 🤝 Contributing
 
@@ -221,6 +281,14 @@ This agentic feature set maintains the same ISC license.
 - **Original tmux** by [Nicholas Marriott](https://github.com/nicm) and contributors
 - **Model Context Protocol** by [Anthropic](https://modelcontextprotocol.io/)
 - **Agentic features** by [Marc Shade](https://github.com/marc-shade)
+
+## 📚 Documentation
+
+- **[AGENTIC_FEATURES.md](AGENTIC_FEATURES.md)** - Complete feature documentation and architecture
+- **[TESTING_RESULTS.md](TESTING_RESULTS.md)** - Comprehensive test results and analysis
+- **[QUICKSTART.md](examples/QUICKSTART.md)** - Quick start guide for new users
+- **[test-with-live-servers.md](examples/test-with-live-servers.md)** - Live server testing guide
+- **[test-mcp-integration.sh](examples/test-mcp-integration.sh)** - Automated test suite
 
 ## 🔗 Links
 

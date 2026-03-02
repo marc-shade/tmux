@@ -328,6 +328,9 @@ window_create(u_int sx, u_int sy, u_int xpixel, u_int ypixel)
 	RB_INSERT(windows, &windows, w);
 
 	window_set_fill_character(w);
+
+	if (gettimeofday(&w->creation_time, NULL) != 0)
+		fatal("gettimeofday failed");
 	window_update_activity(w);
 
 	log_debug("%s: @%u create %ux%u (%ux%u)", __func__, w->id, sx, sy,
@@ -933,7 +936,7 @@ window_pane_create(struct window *w, u_int sx, u_int sy, u_int hlimit)
 	wp = xcalloc(1, sizeof *wp);
 	wp->window = w;
 	wp->options = options_create(w->options);
-	wp->flags = (PANE_STYLECHANGED|PANE_THEMECHANGED);
+	wp->flags = PANE_STYLECHANGED;
 
 	wp->id = next_window_pane_id++;
 	RB_INSERT(window_pane_tree, &all_window_panes, wp);
@@ -1001,6 +1004,8 @@ window_pane_destroy(struct window_pane *wp)
 
 	if (event_initialized(&wp->resize_timer))
 		event_del(&wp->resize_timer);
+	if (event_initialized(&wp->sync_timer))
+		event_del(&wp->sync_timer);
 	TAILQ_FOREACH_SAFE(r, &wp->resize_queue, entry, r1) {
 		TAILQ_REMOVE(&wp->resize_queue, r, entry);
 		free(r);
@@ -1066,7 +1071,7 @@ window_pane_set_event(struct window_pane *wp)
 	    NULL, window_pane_error_callback, wp);
 	if (wp->event == NULL)
 		fatalx("out of memory");
-	wp->ictx = input_init(wp, wp->event, &wp->palette);
+	wp->ictx = input_init(wp, wp->event, &wp->palette, NULL);
 
 	bufferevent_enable(wp->event, EV_READ|EV_WRITE);
 }
@@ -1079,6 +1084,8 @@ window_pane_resize(struct window_pane *wp, u_int sx, u_int sy)
 
 	if (sx == wp->sx && sy == wp->sy)
 		return;
+
+	screen_write_stop_sync(wp);
 
 	r = xmalloc(sizeof *r);
 	r->sx = sx;
@@ -1780,7 +1787,7 @@ window_pane_mode(struct window_pane *wp)
 int
 window_pane_show_scrollbar(struct window_pane *wp, int sb_option)
 {
-	if (SCREEN_IS_ALTERNATE(wp->screen))
+	if (SCREEN_IS_ALTERNATE(&wp->base))
 		return (0);
 	if (sb_option == PANE_SCROLLBARS_ALWAYS ||
 	    (sb_option == PANE_SCROLLBARS_MODAL &&
@@ -1933,6 +1940,8 @@ window_pane_get_theme(struct window_pane *wp)
 void
 window_pane_send_theme_update(struct window_pane *wp)
 {
+	enum client_theme	theme;
+
 	if (wp == NULL || window_pane_exited(wp))
 		return;
 	if (~wp->flags & PANE_THEMECHANGED)
@@ -1940,16 +1949,23 @@ window_pane_send_theme_update(struct window_pane *wp)
 	if (~wp->screen->mode & MODE_THEME_UPDATES)
 		return;
 
-	switch (window_pane_get_theme(wp)) {
+	theme = window_pane_get_theme(wp);
+	if (theme == wp->last_theme)
+		return;
+	wp->last_theme = theme;
+	wp->flags &= ~PANE_THEMECHANGED;
+
+	switch (theme) {
 	case THEME_LIGHT:
-		input_key_pane(wp, KEYC_REPORT_LIGHT_THEME, NULL);
+		log_debug("%s: %%%u light theme", __func__, wp->id);
+		bufferevent_write(wp->event, "\033[?997;2n", 9);
 		break;
 	case THEME_DARK:
-		input_key_pane(wp, KEYC_REPORT_DARK_THEME, NULL);
+		log_debug("%s: %%%u dark theme", __func__, wp->id);
+		bufferevent_write(wp->event, "\033[?997;1n", 9);
 		break;
 	case THEME_UNKNOWN:
+		log_debug("%s: %%%u unknown theme", __func__, wp->id);
 		break;
 	}
-
-	wp->flags &= ~PANE_THEMECHANGED;
 }

@@ -49,6 +49,8 @@
 	" '#{?#{m/r:(copy|view)-mode,#{pane_mode}},Go To Top,}' '<' {send -X history-top}" \
 	" '#{?#{m/r:(copy|view)-mode,#{pane_mode}},Go To Bottom,}' '>' {send -X history-bottom}" \
 	" ''" \
+	" '#{?#{&&:#{buffer_size},#{!:#{pane_in_mode}}},Paste #[underscore]#{=/9/...:buffer_sample},}' 'p' {paste-buffer}" \
+	" ''" \
 	" '#{?mouse_word,Search For #[underscore]#{=/9/...:mouse_word},}' 'C-r' {if -F '#{?#{m/r:(copy|view)-mode,#{pane_mode}},0,1}' 'copy-mode -t='; send -Xt= search-backward -- \"#{q:mouse_word}\"}" \
 	" '#{?mouse_word,Type #[underscore]#{=/9/...:mouse_word},}' 'C-y' {copy-mode -q; send-keys -l -- \"#{q:mouse_word}\"}" \
 	" '#{?mouse_word,Copy #[underscore]#{=/9/...:mouse_word},}' 'c' {copy-mode -q; set-buffer -- \"#{q:mouse_word}\"}" \
@@ -213,6 +215,7 @@ key_bindings_add(const char *name, key_code key, const char *note, int repeat,
 
 	bd = xcalloc(1, sizeof *bd);
 	bd->key = (key & ~KEYC_MASK_FLAGS);
+	bd->tablename = table->name;
 	if (note != NULL)
 		bd->note = xstrdup(note);
 	RB_INSERT(key_bindings, &table->key_bindings, bd);
@@ -295,11 +298,11 @@ key_bindings_remove_table(const char *name)
 	table = key_bindings_get_table(name, 0);
 	if (table != NULL) {
 		RB_REMOVE(key_tables, &key_tables, table);
+		TAILQ_FOREACH(c, &clients, entry) {
+			if (c->keytable == table)
+				server_client_set_key_table(c, NULL);
+		}
 		key_bindings_unref_table(table);
-	}
-	TAILQ_FOREACH(c, &clients, entry) {
-		if (c->keytable == table)
-			server_client_set_key_table(c, NULL);
 	}
 }
 
@@ -439,9 +442,10 @@ key_bindings_init(void)
 
 		/* Mouse button 1 down on pane. */
 		"bind -n MouseDown1Pane { select-pane -t=; send -M }",
+		"bind -n C-MouseDown1Pane { swap-pane -s@ }",
 
 		/* Mouse button 1 drag on pane. */
-		"bind -n MouseDrag1Pane { if -F '#{||:#{alternate_on},#{pane_in_mode},#{mouse_any_flag}}' { send -M } { copy-mode -M } }",
+		"bind -n MouseDrag1Pane { if -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' { send -M } { copy-mode -M } }",
 
 		/* Mouse wheel up on pane. */
 		"bind -n WheelUpPane { if -F '#{||:#{alternate_on},#{pane_in_mode},#{mouse_any_flag}}' { send -M } { copy-mode -e } }",
@@ -460,6 +464,7 @@ key_bindings_init(void)
 
 		/* Mouse button 1 down on status line. */
 		"bind -n MouseDown1Status { switch-client -t= }",
+		"bind -n C-MouseDown1Status { swap-window -t@ }",
 
 		/* Mouse wheel down on status line. */
 		"bind -n WheelDownStatus { next-window }",
@@ -480,9 +485,9 @@ key_bindings_init(void)
 		"bind -n M-MouseDown3Pane { display-menu -t= -xM -yM -T '#[align=centre]#{pane_index} (#{pane_id})' " DEFAULT_PANE_MENU " }",
 
 		/* Mouse on scrollbar. */
-		"bind -n MouseDown1ScrollbarUp { copy-mode -u }",
-		"bind -n MouseDown1ScrollbarDown { copy-mode -d }",
-		"bind -n MouseDrag1ScrollbarSlider { copy-mode -S }",
+		"bind -n MouseDown1ScrollbarUp { if -Ft= '#{pane_in_mode}' { send -X page-up } {copy-mode -u } }",
+		"bind -n MouseDown1ScrollbarDown { if -Ft= '#{pane_in_mode}' { send -X page-down } {copy-mode -d } }",
+		"bind -n MouseDrag1ScrollbarSlider { if -Ft= '#{pane_in_mode}' { send -X scroll-to-mouse } { copy-mode -S } }",
 
 		/* Copy mode (emacs) keys. */
 		"bind -Tcopy-mode C-Space { send -X begin-selection }",
@@ -697,4 +702,16 @@ key_bindings_dispatch(struct key_binding *bd, struct cmdq_item *item,
 	else
 		new_item = cmdq_append(c, new_item);
 	return (new_item);
+}
+
+int
+key_bindings_has_repeat(struct key_binding **l, u_int n)
+{
+	u_int	i;
+
+	for (i = 0; i < n; i++) {
+		if (l[i]->flags & KEY_BINDING_REPEAT)
+			return (1);
+	}
+	return (0);
 }

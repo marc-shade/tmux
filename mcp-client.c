@@ -10,7 +10,7 @@
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUDAMAGES OR ANY DAMAGES
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
  * WHATSOEVER RESULTING FROM LOSS OF MIND, USE, DATA OR PROFITS, WHETHER
  * IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
@@ -34,17 +34,13 @@
 #include "tmux.h"
 #include "mcp-client.h"
 
-static char		*mcp_build_request(int, const char *, const char *);
-static struct mcp_response *mcp_parse_response(const char *);
 static int		 mcp_do_handshake(struct mcp_connection *);
 static int		 mcp_grow_read_buffer(struct mcp_connection *);
-static ssize_t		 mcp_recv(struct mcp_connection *, char *, size_t);
-static ssize_t		 mcp_send(struct mcp_connection *, const char *, size_t);
 static int		 mcp_write_all(int, const char *, size_t);
 static void		 mcp_server_config_free(struct mcp_server_config *);
 
 /* JSON-RPC helper: Build request */
-static char *
+char *
 mcp_build_request(int request_id, const char *method, const char *params)
 {
 	char	*request;
@@ -68,7 +64,7 @@ mcp_build_request(int request_id, const char *method, const char *params)
 }
 
 /* JSON-RPC helper: Parse response (basic implementation) */
-static struct mcp_response *
+struct mcp_response *
 mcp_parse_response(const char *json)
 {
 	struct mcp_response	*resp;
@@ -591,7 +587,7 @@ mcp_write_all(int fd, const char *data, size_t len)
 }
 
 /* Send data via appropriate transport */
-static ssize_t
+ssize_t
 mcp_send(struct mcp_connection *conn, const char *data, size_t len)
 {
 	int	fd;
@@ -641,7 +637,7 @@ mcp_grow_read_buffer(struct mcp_connection *conn)
 }
 
 /* Receive data via appropriate transport */
-static ssize_t
+ssize_t
 mcp_recv(struct mcp_connection *conn, char *buffer, size_t size)
 {
 	ssize_t		n;
@@ -798,6 +794,83 @@ mcp_call_tool(struct mcp_client *client, const char *server_name,
 	resp = mcp_parse_response(buffer);
 
 	return (resp);
+}
+
+/* List available tools */
+struct mcp_response *
+mcp_list_tools(struct mcp_client *client, const char *server_name)
+{
+	struct mcp_connection	*conn;
+	struct mcp_response	*resp;
+	char			*request;
+	char			 buffer[MCP_MAX_MESSAGE_SIZE];
+	ssize_t			 n;
+
+	/* Find and ensure connected */
+	conn = mcp_find_connection(client, server_name);
+	if (conn == NULL)
+		return (NULL);
+
+	if (conn->state != MCP_CONNECTED) {
+		if (mcp_connect_server(client, server_name) < 0)
+			return (NULL);
+	}
+
+	/* Build request for tools/list */
+	request = mcp_build_request(conn->request_id++, "tools/list", NULL);
+
+	/* Send request */
+	n = mcp_send(conn, request, strlen(request));
+	free(request);
+
+	if (n < 0) {
+		conn->errors++;
+		conn->state = MCP_ERROR;
+		return (NULL);
+	}
+
+	conn->requests_sent++;
+	conn->last_activity = time(NULL);
+
+	/* Read response */
+	memset(buffer, 0, sizeof buffer);
+	n = mcp_recv(conn, buffer, sizeof buffer);
+	if (n < 0) {
+		conn->errors++;
+		conn->state = MCP_ERROR;
+		return (NULL);
+	}
+
+	conn->responses_received++;
+	conn->last_activity = time(NULL);
+
+	/* Parse response */
+	resp = mcp_parse_response(buffer);
+
+	return (resp);
+}
+
+/* Check if connection is healthy */
+int
+mcp_connection_healthy(struct mcp_connection *conn)
+{
+	time_t	now;
+
+	if (conn == NULL)
+		return (0);
+
+	if (conn->state != MCP_CONNECTED)
+		return (0);
+
+	if (conn->socket_fd < 0 && conn->stdin_fd < 0)
+		return (0);
+
+	/* Check for timeout */
+	now = time(NULL);
+	if (now - conn->last_activity > MCP_SOCKET_TIMEOUT / 1000)
+		return (0);
+
+	return (1);
 }
 
 /* Get state string */

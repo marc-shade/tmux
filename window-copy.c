@@ -51,6 +51,7 @@ static void	window_copy_redraw_selection(struct window_mode_entry *, u_int);
 static void	window_copy_redraw_lines(struct window_mode_entry *, u_int,
 		    u_int);
 static void	window_copy_redraw_screen(struct window_mode_entry *);
+static void	window_copy_style_changed(struct window_mode_entry *);
 static void	window_copy_write_line(struct window_mode_entry *,
 		    struct screen_write_ctx *, u_int);
 static void	window_copy_write_lines(struct window_mode_entry *,
@@ -158,6 +159,7 @@ const struct window_mode window_copy_mode = {
 	.init = window_copy_init,
 	.free = window_copy_free,
 	.resize = window_copy_resize,
+	.style_changed = window_copy_style_changed,
 	.key_table = window_copy_key_table,
 	.command = window_copy_command,
 	.formats = window_copy_formats,
@@ -170,6 +172,7 @@ const struct window_mode window_view_mode = {
 	.init = window_copy_view_init,
 	.free = window_copy_free,
 	.resize = window_copy_resize,
+	.style_changed = window_copy_style_changed,
 	.key_table = window_copy_key_table,
 	.command = window_copy_command,
 	.formats = window_copy_formats,
@@ -352,7 +355,7 @@ window_copy_clone_screen(struct screen *src, struct screen *hint, u_int *cx,
 	if (trim) {
 		while (sy > screen_hsize(src)) {
 			gl = grid_peek_line(src->grid, sy - 1);
-			if (gl->cellused != 0)
+			if (gl == NULL || gl->cellused != 0)
 				break;
 			sy--;
 		}
@@ -491,7 +494,7 @@ window_copy_view_init(struct window_mode_entry *wme,
 
 	data->backing = xmalloc(sizeof *data->backing);
 	screen_init(data->backing, sx, screen_size_y(base), UINT_MAX);
-	data->ictx = input_init(NULL, NULL, NULL);
+	data->ictx = input_init(NULL, NULL, NULL, NULL);
 	data->mx = data->cx;
 	data->my = screen_hsize(data->backing) + data->cy - data->oy;
 	data->showmark = 0;
@@ -627,7 +630,7 @@ window_copy_scroll1(struct window_mode_entry *wme, struct window_pane *wp,
 		new_slider_y = sb_top - wp->yoff + (sb_height - slider_height);
 	} else {
 		/* Slider is somewhere in the middle. */
-		new_slider_y = my - wp->yoff - sl_mpos + 1;
+		new_slider_y = my - wp->yoff - sl_mpos;
 	}
 
 	if (TAILQ_FIRST(&wp->modes) == NULL ||
@@ -954,6 +957,18 @@ window_copy_formats(struct window_mode_entry *wme, struct format_tree *ft)
 	} else {
 		format_add(ft, "selection_active", "0");
 		format_add(ft, "selection_present", "0");
+	}
+
+	switch (data->selflag) {
+	case SEL_CHAR:
+		format_add(ft, "selection_mode", "char");
+		break;
+	case SEL_WORD:
+		format_add(ft, "selection_mode", "word");
+		break;
+	case SEL_LINE:
+		format_add(ft, "selection_mode", "line");
+		break;
 	}
 
 	format_add(ft, "search_present", "%d", data->searchmark != NULL);
@@ -1477,6 +1492,20 @@ window_copy_cmd_scroll_middle(struct window_copy_cmd_state *cs)
 
 	mid_value = (screen_size_y(&data->screen) - 1) / 2;
 	return (window_copy_cmd_scroll_to(cs, mid_value));
+}
+
+/* Scroll the pane to the mouse in the scrollbar. */
+static enum window_copy_cmd_action
+window_copy_cmd_scroll_to_mouse(struct window_copy_cmd_state *cs)
+{
+	struct window_mode_entry	*wme = cs->wme;
+	struct window_pane		*wp = wme->wp;
+	struct client			*c = cs->c;
+	struct mouse_event		*m = cs->m;
+	int				 scroll_exit = args_has(cs->wargs, 'e');
+
+	window_copy_scroll(wp, c->tty.mouse_slider_mpos, m->y, scroll_exit);
+	return (WINDOW_COPY_CMD_NOTHING);
 }
 
 /* Scroll line containing the cursor to the top. */
@@ -2099,6 +2128,36 @@ window_copy_cmd_rectangle_toggle(struct window_copy_cmd_state *cs)
 }
 
 static enum window_copy_cmd_action
+window_copy_cmd_scroll_exit_on(struct window_copy_cmd_state *cs)
+{
+	struct window_copy_mode_data	*data = cs->wme->data;
+
+	data->scroll_exit = 1;
+
+	return (WINDOW_COPY_CMD_NOTHING);
+}
+
+static enum window_copy_cmd_action
+window_copy_cmd_scroll_exit_off(struct window_copy_cmd_state *cs)
+{
+	struct window_copy_mode_data	*data = cs->wme->data;
+
+	data->scroll_exit = 0;
+
+	return (WINDOW_COPY_CMD_NOTHING);
+}
+
+static enum window_copy_cmd_action
+window_copy_cmd_scroll_exit_toggle(struct window_copy_cmd_state *cs)
+{
+	struct window_copy_mode_data	*data = cs->wme->data;
+
+	data->scroll_exit = !data->scroll_exit;
+
+	return (WINDOW_COPY_CMD_NOTHING);
+}
+
+static enum window_copy_cmd_action
 window_copy_cmd_scroll_down(struct window_copy_cmd_state *cs)
 {
 	struct window_mode_entry	*wme = cs->wme;
@@ -2673,14 +2732,23 @@ window_copy_cmd_refresh_from_pane(struct window_copy_cmd_state *cs)
 	struct window_mode_entry	*wme = cs->wme;
 	struct window_pane		*wp = wme->swp;
 	struct window_copy_mode_data	*data = wme->data;
+	u_int				 oy_from_top;
 
 	if (data->viewmode)
 		return (WINDOW_COPY_CMD_NOTHING);
+	oy_from_top = screen_hsize(data->backing) - data->oy;
 
 	screen_free(data->backing);
 	free(data->backing);
 	data->backing = window_copy_clone_screen(&wp->base, &data->screen, NULL,
 	    NULL, wme->swp != wme->wp);
+
+	if (oy_from_top <= screen_hsize(data->backing))
+		data->oy = screen_hsize(data->backing) - oy_from_top;
+	else {
+		data->cy = 0;
+		data->oy = screen_hsize(data->backing);
+	}
 
 	window_copy_size_changed(wme);
 	return (WINDOW_COPY_CMD_REDRAW);
@@ -3039,10 +3107,30 @@ static const struct {
 	  .clear = WINDOW_COPY_CMD_CLEAR_ALWAYS,
 	  .f = window_copy_cmd_scroll_down_and_cancel
 	},
+	{ .command = "scroll-exit-on",
+	  .args = { "", 0, 0, NULL },
+	  .clear = WINDOW_COPY_CMD_CLEAR_ALWAYS,
+	  .f = window_copy_cmd_scroll_exit_on
+	},
+	{ .command = "scroll-exit-off",
+	  .args = { "", 0, 0, NULL },
+	  .clear = WINDOW_COPY_CMD_CLEAR_ALWAYS,
+	  .f = window_copy_cmd_scroll_exit_off
+	},
+	{ .command = "scroll-exit-toggle",
+	  .args = { "", 0, 0, NULL },
+	  .clear = WINDOW_COPY_CMD_CLEAR_ALWAYS,
+	  .f = window_copy_cmd_scroll_exit_toggle
+	},
 	{ .command = "scroll-middle",
 	  .args = { "", 0, 0, NULL },
 	  .clear = WINDOW_COPY_CMD_CLEAR_ALWAYS,
 	  .f = window_copy_cmd_scroll_middle
+	},
+	{ .command = "scroll-to-mouse",
+	  .args = { "e", 0, 0, NULL },
+	  .clear = WINDOW_COPY_CMD_CLEAR_EMACS_ONLY,
+	  .f = window_copy_cmd_scroll_to_mouse
 	},
 	{ .command = "scroll-top",
 	  .args = { "", 0, 0, NULL },
@@ -3206,6 +3294,15 @@ window_copy_command(struct window_mode_entry *wme, struct client *c,
 		window_pane_reset_mode(wp);
 	else if (action == WINDOW_COPY_CMD_REDRAW)
 		window_copy_redraw_screen(wme);
+	else if (action == WINDOW_COPY_CMD_NOTHING) {
+		/*
+		 * Nothing is not actually nothing - most commands at least
+		 * move the cursor (what would be the point of a command that
+		 * literally does nothing?) and in that case we need to redraw
+		 * the first line to update the indicator.
+		 */
+		window_copy_redraw_lines(wme, 0, 1);
+	}
 }
 
 static void
@@ -3577,6 +3674,10 @@ window_copy_stringify(struct grid *gd, u_int py, u_int first, u_int last,
 	buf = xrealloc(buf, bufsize);
 
 	gl = grid_peek_line(gd, py);
+	if (gl == NULL) {
+		buf[*size - 1] = '\0';
+		return (buf);
+	}
 	bx = *size - 1;
 	for (ax = first; ax < last; ax++) {
 		d = window_copy_cellstring(gl, ax, &dlen, &allocated);
@@ -3622,6 +3723,10 @@ window_copy_cstrtocellpos(struct grid *gd, u_int ncells, u_int *ppx, u_int *ppy,
 	px = *ppx;
 	pywrap = *ppy;
 	gl = grid_peek_line(gd, pywrap);
+	if (gl == NULL) {
+		free(cells);
+		return;
+	}
 	while (cell < ncells) {
 		cells[cell].d = window_copy_cellstring(gl, px,
 		    &cells[cell].dlen, &cells[cell].allocated);
@@ -3631,6 +3736,8 @@ window_copy_cstrtocellpos(struct grid *gd, u_int ncells, u_int *ppx, u_int *ppy,
 			px = 0;
 			pywrap++;
 			gl = grid_peek_line(gd, pywrap);
+			if (gl == NULL)
+				break;
 		}
 	}
 
@@ -4032,7 +4139,7 @@ window_copy_visible_lines(struct window_copy_mode_data *data, u_int *start,
 
 	for (*start = gd->hsize - data->oy; *start > 0; (*start)--) {
 		gl = grid_peek_line(gd, (*start) - 1);
-		if (~gl->flags & GRID_LINE_WRAPPED)
+		if (gl == NULL || ~gl->flags & GRID_LINE_WRAPPED)
 			break;
 	}
 	*end = gd->hsize - data->oy + gd->sy;
@@ -4222,6 +4329,9 @@ static void
 window_copy_clear_marks(struct window_mode_entry *wme)
 {
 	struct window_copy_mode_data	*data = wme->data;
+
+	data->searchcount = -1;
+	data->searchmore = 0;
 
 	free(data->searchmark);
 	data->searchmark = NULL;
@@ -4548,6 +4658,16 @@ window_copy_redraw_screen(struct window_mode_entry *wme)
 	struct window_copy_mode_data	*data = wme->data;
 
 	window_copy_redraw_lines(wme, 0, screen_size_y(&data->screen));
+}
+
+static void
+window_copy_style_changed(struct window_mode_entry *wme)
+{
+	struct window_copy_mode_data	*data = wme->data;
+
+	if (data->screen.sel != NULL)
+		window_copy_set_selection(wme, 0, 1);
+	window_copy_redraw_screen(wme);
 }
 
 static void
@@ -4991,9 +5111,9 @@ static void
 window_copy_append_selection(struct window_mode_entry *wme)
 {
 	struct window_pane		*wp = wme->wp;
-	char				*buf;
+	char				*buf, *bufname = NULL;
 	struct paste_buffer		*pb;
-	const char			*bufdata, *bufname = NULL;
+	const char			*bufdata;
 	size_t				 len, bufsize;
 	struct screen_write_ctx		 ctx;
 
@@ -5018,6 +5138,7 @@ window_copy_append_selection(struct window_mode_entry *wme)
 	}
 	if (paste_set(buf, len, bufname, NULL) != 0)
 		free(buf);
+	free(bufname);
 }
 
 static void
