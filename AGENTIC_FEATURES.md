@@ -78,7 +78,6 @@ sudo apt-get install libevent-dev ncurses-dev libutf8proc-dev automake pkg-confi
 ```bash
 git clone https://github.com/marc-shade/tmux.git
 cd tmux
-git checkout agentic-features
 
 ./autogen.sh
 ./configure --enable-utf8proc
@@ -90,10 +89,10 @@ sudo make install
 
 ```bash
 tmux -V
-# Should show: tmux next-3.6
+# Should show: tmux next-3.7
 
-tmux list-commands | grep -E "(show-agent|mcp-query)"
-# Should show both custom commands
+tmux list-commands | grep -E "(agent|mcp|template)"
+# Should show 12 agentic commands
 ```
 
 ## Usage Examples
@@ -160,12 +159,38 @@ tmux show-agent -t test-oauth
 
 ### Components
 
-1. **mcp-client.c/h**: Native MCP client with stdio and socket transports
-2. **mcp-config.c/h**: Configuration parser for `~/.claude.json`
-3. **session-agent.c/h**: Session-agent lifecycle management
-4. **agent-manager.c**: Global agent coordination (future)
-5. **cmd-show-agent.c**: `show-agent` command implementation
-6. **cmd-mcp-query.c**: `mcp-query` command implementation
+**MCP Infrastructure** (7 files):
+1. **mcp-client.c/h** - Native MCP client with stdio/socket transports, JSON-RPC 2.0
+2. **mcp-config.c/h** - C-native JSON parser for ~/.claude.json
+3. **mcp-protocol.c** - MCP protocol handshake (initialize/initialized)
+4. **mcp-async.c** - Async operations with libevent and priority queuing
+5. **mcp-pool.c** - Connection pooling with idle timeout
+6. **mcp-metrics.c** - Per-server latency tracking (min/max/avg/p95/p99)
+7. **mcp-socket.c** - Unix domain socket transport
+
+**Agent System** (8 files):
+1. **session-agent.c/h** - Session-agent lifecycle and multi-session coordination
+2. **session-mcp-integration.c** - Enhanced-memory and agent-runtime-mcp hooks
+3. **session-template.c** - Built-in session templates (research, development, simple)
+4. **agent-manager.c** - Global agent coordination
+5. **agent-analytics.c** - Performance analytics engine
+6. **agent-learning.c** - Pattern recognition from session history
+7. **agent-optimizer.c** - Workflow optimization strategies
+8. **context-semantic.c** / **context-compress.c** - Smart context extraction and compression
+
+**Commands** (12 files):
+1. **cmd-show-agent.c** - Display agent metadata
+2. **cmd-mcp-query.c** - Query MCP servers
+3. **cmd-mcp-stats.c** - MCP connection statistics
+4. **cmd-agent-analytics.c** - Performance analytics
+5. **cmd-agent-optimize.c** - Optimization recommendations
+6. **cmd-agent-join-group.c** - Join coordination group
+7. **cmd-agent-leave-group.c** - Leave coordination group
+8. **cmd-agent-share.c** - Share context with group
+9. **cmd-agent-peers.c** - List peers and shared context
+10. **cmd-list-agent-groups.c** - List coordination groups
+11. **cmd-list-templates.c** - List session templates
+12. **cmd-new-from-template.c** - Create session from template
 
 ### Data Structures
 
@@ -190,8 +215,8 @@ struct session {
 ### MCP Transport
 
 Supports two transport methods:
-- **stdio**: Spawn MCP server process, communicate via stdin/stdout
-- **socket**: Connect to running MCP server via Unix socket (future)
+- **stdio**: Spawn MCP server process, communicate via stdin/stdout pipes
+- **socket**: Connect to running MCP server via Unix domain socket (with automatic fallback to stdio)
 
 ## Configuration
 
@@ -337,12 +362,37 @@ Tmux automatically loads this configuration on first MCP query.
   - Key-value context sharing between coordinated sessions
   - Comprehensive test suite (20/20 tests, 38/38 assertions passing)
 
-### 🚧 Planned (Phase 4.4+)
+### ✅ Completed (Phase 4.4 - Advanced Features)
 
-- [ ] Session templates library
-- [ ] Cross-session learning and optimization
-- [ ] Agent performance analytics dashboard
-- [ ] Integration with additional MCP servers
+- [x] **Agent performance analytics** - COMPLETED
+  - Analytics engine with per-type metrics tracking
+  - Session lifecycle tracking (start/end/success/failure)
+  - `agent-analytics` command with summary and type-filtered views
+  - 14/14 tests passing
+- [x] **Session templates** - COMPLETED
+  - Template engine with variable substitution ({{GOAL}}, {{SESSION}}, {{GROUP}})
+  - 3 built-in templates: research, development, simple
+  - `list-templates` and `new-from-template` commands
+- [x] **Advanced context management** - COMPLETED
+  - Semantic context extraction with relevance scoring
+  - Context compression via deduplication and filtering
+  - Smart context saving integrated with enhanced-memory
+- [x] **Learning and optimization** - COMPLETED
+  - Pattern recognition (success, failure, workflow, efficiency)
+  - 4 optimization strategies: workflow, performance, efficiency, quality
+  - `agent-optimize` command with auto-strategy selection
+
+### Bug Fixes (2026-03-02)
+
+- [x] MCP initialize/initialized handshake per JSON-RPC 2.0 spec
+- [x] JSON injection prevention via `json_escape()` in all MCP payloads
+- [x] Zombie process prevention with SIGKILL fallback after SIGTERM
+- [x] Non-blocking session lifecycle with `mcp_server_ready()` guard
+- [x] C-native JSON config parser (removed Python helper dependency)
+- [x] Socket timeout reduced from 5s to 2s
+- [x] Connection health checks cover both socket and stdio transports
+
+**Total Implementation**: 9,100+ lines of agentic C code across 28 source files
 
 ## Testing
 
@@ -369,14 +419,13 @@ tmux show-agent -t test
 
 ```bash
 # Ensure MCP servers are configured in ~/.claude.json
+jq '.mcpServers | keys[]' ~/.claude.json
 
-# Test configuration loading
-/Volumes/FILES/code/tmux/mcp-config-helper.py
-
-# Should output server configurations
-
-# Test MCP query (requires MCP protocol completion)
+# Test MCP query
 tmux mcp-query enhanced-memory get_memory_status '{}'
+
+# View connection stats
+tmux mcp-stats
 ```
 
 ## Troubleshooting
@@ -386,15 +435,15 @@ tmux mcp-query enhanced-memory get_memory_status '{}'
 ```bash
 # Verify installation
 which tmux
-# Should show: /usr/local/bin/tmux
+# Should show: /usr/local/bin/tmux (or /opt/homebrew/bin/tmux on macOS)
 
 # Check version
 tmux -V
-# Should show: tmux next-3.6
+# Should show: tmux next-3.7
 
-# Verify commands are available
-tmux list-commands | wc -l
-# Should show: 92 (including show-agent and mcp-query)
+# Verify agentic commands are available
+tmux list-commands | grep -cE "(agent|mcp|template)"
+# Should show: 12
 
 # If commands missing, kill server and retry
 tmux kill-server
@@ -404,15 +453,14 @@ tmux new-session
 ### MCP Connection Errors
 
 ```bash
-# Verify config helper works
-/Volumes/FILES/code/tmux/mcp-config-helper.py
-
 # Check MCP server paths in ~/.claude.json
 jq '.mcpServers | keys[]' ~/.claude.json
 
-# Ensure server commands are executable
-which python
-# Should match paths in config
+# Test MCP connectivity
+tmux mcp-query enhanced-memory get_memory_status '{}'
+
+# View connection statistics
+tmux mcp-stats
 ```
 
 ### Agent Metadata Not Showing

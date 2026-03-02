@@ -1,10 +1,10 @@
 # tmux - Terminal Multiplexer with Agentic AI Integration
 
-[![Version](https://img.shields.io/badge/version-next--3.6-blue.svg)](https://github.com/marc-shade/tmux)
+[![Version](https://img.shields.io/badge/version-next--3.7-blue.svg)](https://github.com/marc-shade/tmux)
 [![License](https://img.shields.io/badge/license-ISC-green.svg)](COPYING)
 [![Build Status](https://img.shields.io/badge/build-passing-success.svg)]()
-[![Phase](https://img.shields.io/badge/phase-4.3%20complete-brightgreen.svg)](AGENTIC_FEATURES.md)
-[![Tests](https://img.shields.io/badge/tests-7%2F7%20passing-success.svg)](TESTING_RESULTS.md)
+[![Phase](https://img.shields.io/badge/phase-4.4%20complete-brightgreen.svg)](AGENTIC_FEATURES.md)
+[![Commands](https://img.shields.io/badge/commands-108%20total%20%7C%2012%20agentic-informational.svg)]()
 
 **tmux** is a terminal multiplexer that enables multiple terminals to be created, accessed, and controlled from a single screen. This fork adds **native Model Context Protocol (MCP) integration** and **agentic AI workflow support** for advanced AI-assisted development workflows.
 
@@ -17,9 +17,13 @@ This fork extends tmux with powerful AI agent integration capabilities:
 - **🤖 Agent-Aware Sessions** - Create sessions with agent metadata that tracks purpose, goals, and progress
 - **🔌 Native MCP Integration** - Query MCP servers directly from tmux without external tools
 - **💾 Session Persistence** - Auto-save/restore session state with agent context
-- **📊 Progress Tracking** - Monitor tasks completed, interactions, and runtime metrics
+- **📊 Agent Analytics** - Track session performance, success rates, and per-type metrics
 - **🔗 Agent Runtime Integration** - Connect sessions to agent-runtime-mcp goals
 - **🧠 Memory Integration** - Save context to enhanced-memory for cross-session learning
+- **👥 Multi-Session Coordination** - Coordinate multiple AI agents across sessions with shared context
+- **📋 Session Templates** - Create sessions from built-in templates (research, development, simple)
+- **🧬 Learning & Optimization** - Pattern recognition and workflow optimization from session history
+- **🔍 Semantic Context** - Smart context extraction with relevance scoring and compression
 
 ### Quick Example
 
@@ -27,12 +31,27 @@ This fork extends tmux with powerful AI agent integration capabilities:
 # Create an agent-aware research session
 tmux new-session -G research -o "Study OAuth2 flows" -s oauth-research
 
+# Or create from a built-in template
+tmux new-from-template -t research -s oauth-research -g "Study OAuth2 flows"
+
 # View agent metadata
 tmux show-agent -t oauth-research
 
 # Query MCP servers directly
 tmux mcp-query enhanced-memory get_memory_status '{}'
 tmux mcp-query agent-runtime-mcp list_goals '{}'
+
+# View performance analytics
+tmux agent-analytics
+tmux agent-analytics -t research    # Per-type breakdown
+
+# Coordinate multiple agents
+tmux agent-join-group -g oauth-team
+tmux agent-share -k status -v "researching grant types"
+tmux agent-peers                    # List peers and shared context
+
+# Get optimization recommendations
+tmux agent-optimize -s auto
 
 # Session auto-saves on detach, auto-restores on attach
 tmux detach-client
@@ -58,7 +77,6 @@ sudo apt-get install libevent-dev ncurses-dev libutf8proc-dev automake pkg-confi
 ```bash
 git clone https://github.com/marc-shade/tmux.git
 cd tmux
-git checkout agentic-features
 
 ./autogen.sh
 ./configure --enable-utf8proc
@@ -70,10 +88,10 @@ sudo make install
 
 ```bash
 tmux -V
-# Should show: tmux next-3.6
+# Should show: tmux next-3.7
 
-tmux list-commands | grep -E "(show-agent|mcp-query)"
-# Should show both custom commands
+tmux list-commands | grep -E "(agent|mcp|template)"
+# Should show 12 agentic commands
 ```
 
 ## 📖 Documentation
@@ -104,33 +122,68 @@ tmux mcp-query enhanced-memory create_entities '{"entities":[{"name":"research-f
 ```
 
 ### 3. Multi-Agent Coordination
-Run multiple specialized AI agents across different tmux sessions.
+Run multiple specialized AI agents across tmux sessions with shared context.
 
 ```bash
 # Research agent
 tmux new-session -G research -o "Study API patterns" -s research-api -d
+tmux agent-join-group -t research-api -g api-team
 
 # Development agent
 tmux new-session -G development -o "Build API client" -s dev-api -d
+tmux agent-join-group -t dev-api -g api-team
 
 # Testing agent
 tmux new-session -G testing -o "Test API integration" -s test-api -d
+tmux agent-join-group -t test-api -g api-team
 
-# Switch between agents
-tmux list-sessions
-tmux attach -t research-api
+# Share context between agents
+tmux agent-share -t research-api -k findings -v "REST preferred over GraphQL"
+tmux agent-peers -t dev-api  # See shared context from peers
+
+# View coordination groups
+tmux list-agent-groups
 ```
 
 ## 🏗️ Architecture
 
 ### Core Components
 
-- **mcp-client.c/h** - Native MCP client with stdio/socket transports
-- **mcp-config.c/h** - Automatic configuration from ~/.claude.json
-- **session-agent.c/h** - Session-agent lifecycle management
-- **agent-manager.c** - Global agent coordination
-- **cmd-show-agent.c** - Display agent metadata command
-- **cmd-mcp-query.c** - Query MCP servers command
+| Component | Description |
+|-----------|-------------|
+| **mcp-client.c/h** | Native MCP client with stdio/socket transports, JSON-RPC 2.0 |
+| **mcp-config.c/h** | C-native JSON parser for ~/.claude.json configuration |
+| **mcp-protocol.c** | MCP protocol handshake (initialize/initialized sequence) |
+| **mcp-async.c** | Async MCP operations with libevent, priority queuing |
+| **mcp-pool.c** | Connection pooling with idle timeout and reference counting |
+| **mcp-metrics.c** | Per-server latency tracking (min/max/avg/p95/p99) |
+| **mcp-socket.c** | Unix domain socket transport with non-blocking I/O |
+| **session-agent.c/h** | Session-agent lifecycle management and coordination |
+| **session-mcp-integration.c** | Enhanced-memory and agent-runtime-mcp integration |
+| **session-template.c** | Built-in session templates (research, development, simple) |
+| **agent-manager.c** | Global agent coordination |
+| **agent-analytics.c** | Performance analytics engine with per-type metrics |
+| **agent-learning.c** | Pattern recognition from session history |
+| **agent-optimizer.c** | Workflow optimization strategies and recommendations |
+| **context-semantic.c** | Semantic context extraction with relevance scoring |
+| **context-compress.c** | Context compression via deduplication and filtering |
+
+### Agentic Commands (12)
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `show-agent` | | Display agent metadata for a session |
+| `mcp-query` | | Query MCP servers directly |
+| `mcp-stats` | | Display MCP connection and performance statistics |
+| `agent-analytics` | | View session performance analytics |
+| `agent-optimize` | `optim` | Get optimization recommendations |
+| `agent-join-group` | `ajoin` | Join a coordination group |
+| `agent-leave-group` | `aleave` | Leave a coordination group |
+| `agent-share` | `ashare` | Share key-value context with group |
+| `agent-peers` | `apeers` | List peers and shared context |
+| `list-agent-groups` | `lsag` | List all coordination groups |
+| `list-templates` | `lst` | List available session templates |
+| `new-from-template` | `newt` | Create session from template |
 
 ### Agent Metadata Structure
 
@@ -146,9 +199,12 @@ Each agent-aware session tracks:
 ### MCP Integration
 
 Supports MCP servers configured in `~/.claude.json`:
-- **Automatic configuration loading** on first use
+- **Automatic configuration loading** via C-native JSON parser
 - **stdio transport** for spawning MCP server processes
-- **JSON-RPC communication** following MCP specification
+- **Unix socket transport** with connection pooling and idle timeout
+- **JSON-RPC 2.0** with proper initialize/initialized handshake
+- **Async operations** with priority queuing (urgent/high/normal/low)
+- **Performance metrics** with per-server latency tracking (p95/p99)
 - **Native C implementation** for optimal performance
 
 ## 🔧 Configuration
@@ -219,8 +275,6 @@ tmux automatically loads this configuration when you run your first `mcp-query` 
 - [x] Per-server latency tracking (min/max/avg/p95/p99)
 - [x] Connection health monitoring and pool statistics
 
-**Total Implementation**: 4,199+ lines of production code + 2,506 lines of documentation
-
 See [TESTING_RESULTS.md](TESTING_RESULTS.md) and [PHASE_4.1_FEATURES.md](PHASE_4.1_FEATURES.md) for detailed results.
 
 ### ✅ Phase 4.2: Async Operations (Complete - 2025-11-13)
@@ -252,11 +306,28 @@ See [TESTING_RESULTS.md](TESTING_RESULTS.md) and [PHASE_4.1_FEATURES.md](PHASE_4
 
 **Collaboration Enabled**: Multiple AI agents can now coordinate across tmux sessions
 
-### 🚧 Planned (Phase 4.4+)
-- [ ] Session templates library
-- [ ] Cross-session learning and optimization
-- [ ] Agent performance analytics dashboard
-- [ ] Advanced context management
+### ✅ Phase 4.4: Advanced Features (Complete - 2025-11-13)
+- [x] Agent performance analytics engine with per-type metrics (agent-analytics.c, 877 lines)
+- [x] `agent-analytics` command with summary and type-filtered views
+- [x] Session templates with 3 built-in templates (session-template.c, 890 lines)
+- [x] `list-templates` / `new-from-template` commands
+- [x] Semantic context extraction with relevance scoring (context-semantic.c, 410 lines)
+- [x] Context compression via deduplication and filtering (context-compress.c, 330 lines)
+- [x] Learning engine with pattern recognition (agent-learning.c, 550 lines)
+- [x] Workflow optimization with 4 strategies (agent-optimizer.c, 380 lines)
+- [x] `agent-optimize` command with strategy selection
+
+### Bug Fixes (2026-03-02)
+- [x] MCP initialize/initialized handshake per JSON-RPC 2.0 spec
+- [x] JSON injection prevention via `json_escape()` in all MCP payloads
+- [x] Zombie process prevention with SIGKILL fallback after SIGTERM
+- [x] Non-blocking session lifecycle with `mcp_server_ready()` guard
+- [x] C-native JSON config parser (removed Python helper dependency)
+- [x] MCP socket timeout reduced from 5s to 2s for responsiveness
+- [x] Connection health checks cover both socket and stdio transports
+- [x] Proper forward declarations for all static functions
+
+**Total Implementation**: 9,100+ lines of agentic C code across 28 source files
 
 ## 🤝 Contributing
 
