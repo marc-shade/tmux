@@ -27,6 +27,7 @@
 #include "session-agent.h"
 #include "session-mcp-integration.h"
 #include "agent-analytics.h"
+#include "mcp-events.h"
 
 /*
  * Escape a string for safe embedding in JSON.
@@ -133,6 +134,9 @@ session_agent_create(const char *agent_type, const char *goal,
 	/* Phase 4.4: Record session start for analytics */
 	agent_analytics_record_session_start(agent->agent_type);
 
+	/* Phase 5: Emit agent created event */
+	mcp_event_agent_created(session_name, agent_type, goal);
+
 	return (agent);
 }
 
@@ -150,6 +154,10 @@ session_agent_destroy(struct session_agent *agent)
 	/* Phase 4.4: Record session end for analytics */
 	agent_analytics_record_session_end(agent->agent_type,
 	    agent->runtime_goal_id != NULL ? 1 : 0);
+
+	/* Phase 5: Emit agent completed event */
+	mcp_event_agent_completed(agent->session_name, agent->agent_type,
+	    agent->tasks_completed, agent->interactions);
 
 	free(agent->agent_type);
 	free(agent->goal);
@@ -477,6 +485,10 @@ session_agent_join_group(struct session_agent *agent, const char *group_name)
 	/* First session in group becomes coordinator */
 	agent->is_coordinator = 1;
 	agent->last_coordination = time(NULL);
+
+	/* Phase 5: Emit group changed event */
+	mcp_event_agent_group_changed(agent->session_name,
+	    agent->agent_type, group_name);
 
 	return (0);
 }

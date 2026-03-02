@@ -84,9 +84,11 @@ dist_tmux_SOURCES = \
 	mcp-async.c \
 	mcp-client.c \
 	mcp-config.c \
+	mcp-events.c \
 	mcp-metrics.c \
 	mcp-pool.c \
 	mcp-protocol.c \
+	mcp-server.c \
 	mcp-socket.c \
 	session-agent.c \
 	session-mcp-integration.c \
@@ -158,6 +160,8 @@ dist_tmux_SOURCES = \
 	cmd-set-option.c \
 	cmd-show-agent.c \
 	cmd-agent-analytics.c \
+	cmd-agent-dashboard.c \
+	cmd-agent-notify.c \
 	cmd-agent-optimize.c \
 	cmd-agent-join-group.c \
 	cmd-agent-leave-group.c \
@@ -165,6 +169,7 @@ dist_tmux_SOURCES = \
 	cmd-agent-peers.c \
 	cmd-list-agent-groups.c \
 	cmd-list-templates.c \
+	cmd-mcp-serve.c \
 	cmd-new-from-template.c \
 	cmd-show-environment.c \
 	cmd-show-messages.c \

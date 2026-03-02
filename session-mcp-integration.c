@@ -26,6 +26,7 @@
 #include "mcp-client.h"
 #include "mcp-protocol.h"
 #include "session-agent.h"
+#include "session-mcp-integration.h"
 #include "context-semantic.h"
 #include "context-compress.h"
 
@@ -394,6 +395,162 @@ session_mcp_save_smart_context(struct session_agent *agent, struct session *s)
 	context_semantic_free(semantic);
 
 	return (ret);
+}
+
+/*
+ * Phase 5: Capture pane content and feed into semantic context pipeline.
+ * Grabs the last N lines from each pane in the session, extracts commands,
+ * errors, and patterns, then saves to enhanced-memory.
+ */
+int
+session_mcp_capture_pane_context(struct session_agent *agent, struct session *s)
+{
+	struct winlink		*wl;
+	struct window_pane	*wp;
+	struct grid		*gd;
+	struct semantic_context	*semantic;
+	struct compressed_context *compressed;
+	struct mcp_response	*resp;
+	char			*line, *params, *summary;
+	char			 timestamp[64];
+	size_t			 linelen, params_len;
+	u_int			 i, sy, top, captured = 0;
+	int			 max_lines = 100;
+	time_t			 now;
+	struct tm		*tm_info;
+
+	if (agent == NULL || s == NULL || global_mcp_client == NULL)
+		return (-1);
+
+	/* Create semantic context for capture. */
+	semantic = context_semantic_extract(s, agent);
+	if (semantic == NULL)
+		return (-1);
+
+	/* Walk all windows and panes, capture scrollback. */
+	RB_FOREACH(wl, winlinks, &s->windows) {
+		if (wl->window == NULL)
+			continue;
+		TAILQ_FOREACH(wp, &wl->window->panes, entry) {
+			gd = wp->base.grid;
+			if (gd == NULL)
+				continue;
+
+			sy = gd->sy;
+			top = (u_int)max_lines > sy ? 0 :
+			    sy - (u_int)max_lines;
+
+			for (i = top; i < sy; i++) {
+				line = grid_string_cells(gd, 0, i,
+				    screen_size_x(&wp->base), NULL,
+				    0, &wp->base);
+				if (line == NULL)
+					continue;
+
+				/* Trim trailing whitespace. */
+				linelen = strlen(line);
+				while (linelen > 0 &&
+				    line[linelen - 1] == ' ')
+					line[--linelen] = '\0';
+
+				/* Skip empty lines. */
+				if (linelen == 0) {
+					free(line);
+					continue;
+				}
+
+				/* Detect line type and add to context. */
+				if (line[0] == '$' || line[0] == '%' ||
+				    line[0] == '#' ||
+				    (line[0] == '>' && line[1] == ' ')) {
+					context_semantic_add_item(semantic,
+					    SEMANTIC_COMMAND, line, 0.8f);
+				} else if (strstr(line, "error") != NULL ||
+				    strstr(line, "Error") != NULL ||
+				    strstr(line, "ERROR") != NULL ||
+				    strstr(line, "fatal") != NULL ||
+				    strstr(line, "FAIL") != NULL) {
+					context_semantic_add_item(semantic,
+					    SEMANTIC_ERROR, line, 0.9f);
+				} else if (line[0] == '/' ||
+				    strstr(line, "./") != NULL ||
+				    strstr(line, "src/") != NULL) {
+					context_semantic_add_item(semantic,
+					    SEMANTIC_FILE, line, 0.6f);
+				} else {
+					context_semantic_add_item(semantic,
+					    SEMANTIC_OUTPUT, line, 0.3f);
+				}
+				captured++;
+				free(line);
+			}
+		}
+	}
+
+	if (captured == 0) {
+		context_semantic_free(semantic);
+		return (0);
+	}
+
+	/* Compress the captured context. */
+	compressed = context_compress(semantic);
+	if (compressed == NULL) {
+		context_semantic_free(semantic);
+		return (-1);
+	}
+
+	/* Format timestamp. */
+	now = time(NULL);
+	tm_info = localtime(&now);
+	strftime(timestamp, sizeof timestamp, "%Y-%m-%d %H:%M:%S", tm_info);
+
+	summary = compressed->summary;
+
+	/* Build entity with captured pane content. */
+	params_len = 2048 + strlen(summary);
+	params = xmalloc(params_len);
+	snprintf(params, params_len,
+	    "{\"entities\":[{"
+	    "\"name\":\"pane-capture-%s-%ld\","
+	    "\"entityType\":\"pane_context\","
+	    "\"observations\":["
+	    "\"Type: pane_capture\","
+	    "\"Agent: %s\","
+	    "\"Lines captured: %u\","
+	    "\"Commands: %u\","
+	    "\"Errors: %u\","
+	    "\"Quality: %.2f\","
+	    "\"Summary: %s\","
+	    "\"Timestamp: %s\""
+	    "]"
+	    "}]}",
+	    agent->session_name ? agent->session_name : "unknown",
+	    (long)now,
+	    agent->agent_type ? agent->agent_type : "unknown",
+	    captured,
+	    semantic->command_count,
+	    semantic->error_count,
+	    compressed->quality,
+	    summary,
+	    timestamp);
+
+	resp = mcp_call_tool_safe(global_mcp_client, "enhanced-memory",
+	    "create_entities", params);
+	free(params);
+
+	context_compress_free(compressed);
+	context_semantic_free(semantic);
+
+	if (resp == NULL || !resp->success) {
+		if (resp != NULL)
+			mcp_response_free(resp);
+		return (-1);
+	}
+
+	mcp_response_free(resp);
+	log_debug("Pane context captured: %u lines from session %s",
+	    captured, agent->session_name);
+	return (0);
 }
 
 /*
