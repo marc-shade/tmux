@@ -26,7 +26,7 @@
 
 #define MCP_MAX_SERVERS 16
 #define MCP_MAX_MESSAGE_SIZE 65536
-#define MCP_SOCKET_TIMEOUT 5000  /* 5 seconds */
+#define MCP_SOCKET_TIMEOUT 2000  /* 2 seconds */
 
 /* MCP transport type */
 enum mcp_transport {
@@ -116,15 +116,9 @@ struct mcp_connection	*mcp_find_connection(struct mcp_client *, const char *);
 /* Communication */
 struct mcp_response	*mcp_call_tool(struct mcp_client *, const char *,
 				const char *, const char *);
-struct mcp_response	*mcp_list_tools(struct mcp_client *, const char *);
 void			mcp_response_free(struct mcp_response *);
 
-/* Status and health */
-int			mcp_connection_healthy(struct mcp_connection *);
+/* Status */
 const char		*mcp_state_string(enum mcp_state);
-
-/* JSON-RPC helpers (internal) */
-char			*mcp_build_request(int, const char *, const char *);
-struct mcp_response	*mcp_parse_response(const char *);
 
 #endif /* MCP_CLIENT_H */

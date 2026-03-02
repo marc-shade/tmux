@@ -34,8 +34,17 @@
 #include "tmux.h"
 #include "mcp-client.h"
 
+static char		*mcp_build_request(int, const char *, const char *);
+static struct mcp_response *mcp_parse_response(const char *);
+static int		 mcp_do_handshake(struct mcp_connection *);
+static int		 mcp_grow_read_buffer(struct mcp_connection *);
+static ssize_t		 mcp_recv(struct mcp_connection *, char *, size_t);
+static ssize_t		 mcp_send(struct mcp_connection *, const char *, size_t);
+static int		 mcp_write_all(int, const char *, size_t);
+static void		 mcp_server_config_free(struct mcp_server_config *);
+
 /* JSON-RPC helper: Build request */
-char *
+static char *
 mcp_build_request(int request_id, const char *method, const char *params)
 {
 	char	*request;
@@ -59,7 +68,7 @@ mcp_build_request(int request_id, const char *method, const char *params)
 }
 
 /* JSON-RPC helper: Parse response (basic implementation) */
-struct mcp_response *
+static struct mcp_response *
 mcp_parse_response(const char *json)
 {
 	struct mcp_response	*resp;
@@ -181,32 +190,56 @@ mcp_client_init(struct mcp_client *client)
 	if (client == NULL)
 		return (-1);
 
+	/* Ignore SIGPIPE so writes to dead MCP children don't kill tmux. */
+	signal(SIGPIPE, SIG_IGN);
+
 	client->initialized = 1;
 	return (0);
+}
+
+/* Free an MCP server config including its args array. */
+static void
+mcp_server_config_free(struct mcp_server_config *config)
+{
+	int	i;
+
+	if (config == NULL)
+		return;
+
+	free(config->name);
+	free(config->socket_path);
+	free(config->command);
+
+	if (config->args != NULL) {
+		for (i = 0; config->args[i] != NULL; i++)
+			free(config->args[i]);
+		free(config->args);
+	}
+
+	free(config);
 }
 
 /* Destroy MCP client */
 void
 mcp_client_destroy(struct mcp_client *client)
 {
-	int	i;
+	int			 i;
+	struct mcp_connection	*conn;
 
 	if (client == NULL)
 		return;
 
-	/* Disconnect all servers */
+	/* Disconnect and free all connections */
 	for (i = 0; i < client->num_connections; i++) {
-		if (client->connections[i] != NULL) {
-			if (client->connections[i]->socket_fd >= 0)
-				close(client->connections[i]->socket_fd);
+		conn = client->connections[i];
+		if (conn == NULL)
+			continue;
 
-			free(client->connections[i]->config->name);
-			free(client->connections[i]->config->socket_path);
-			free(client->connections[i]->config->command);
-			/* TODO: Free args array */
-			free(client->connections[i]->config);
-			free(client->connections[i]);
-		}
+		/* Close fds and reap children */
+		mcp_disconnect_server(client, conn->config->name);
+
+		mcp_server_config_free(conn->config);
+		free(conn);
 	}
 
 	free(client);
@@ -342,6 +375,58 @@ mcp_connect_stdio(struct mcp_connection *conn)
 	conn->connected_at = time(NULL);
 	conn->last_activity = time(NULL);
 
+	/* Perform MCP initialize handshake */
+	if (mcp_do_handshake(conn) < 0) {
+		conn->state = MCP_ERROR;
+		return (-1);
+	}
+
+	return (0);
+}
+
+/*
+ * Perform MCP protocol handshake: send initialize, receive response,
+ * send initialized notification.
+ */
+static int
+mcp_do_handshake(struct mcp_connection *conn)
+{
+	char		*request;
+	char		 buffer[MCP_MAX_MESSAGE_SIZE];
+	ssize_t		 n;
+	const char	*init_params =
+	    "{\"protocolVersion\":\"2024-11-05\","
+	    "\"capabilities\":{},"
+	    "\"clientInfo\":{\"name\":\"tmux\",\"version\":\"next-3.6\"}}";
+
+	/* Send initialize request */
+	request = mcp_build_request(conn->request_id++, "initialize",
+	    init_params);
+	n = mcp_send(conn, request, strlen(request));
+	free(request);
+
+	if (n < 0)
+		return (-1);
+
+	/* Read initialize response */
+	memset(buffer, 0, sizeof buffer);
+	n = mcp_recv(conn, buffer, sizeof buffer);
+	if (n < 0)
+		return (-1);
+
+	/* Verify we got a result (not an error) */
+	if (strstr(buffer, "\"error\"") != NULL)
+		return (-1);
+
+	/* Send initialized notification (no id — it's a notification) */
+	request = xstrdup("{\"jsonrpc\":\"2.0\","
+	    "\"method\":\"notifications/initialized\"}");
+	n = mcp_send(conn, request, strlen(request));
+	free(request);
+
+	if (n < 0)
+		return (-1);
+
 	return (0);
 }
 
@@ -432,7 +517,7 @@ mcp_disconnect_server(struct mcp_client *client, const char *server_name)
 		conn->socket_fd = -1;
 	}
 
-	/* Clean up stdio transport */
+	/* Clean up stdio transport — close pipes first, then reap child */
 	if (conn->stdin_fd >= 0) {
 		close(conn->stdin_fd);
 		conn->stdin_fd = -1;
@@ -445,7 +530,14 @@ mcp_disconnect_server(struct mcp_client *client, const char *server_name)
 
 	if (conn->server_pid > 0) {
 		kill(conn->server_pid, SIGTERM);
-		waitpid(conn->server_pid, NULL, WNOHANG);
+		/* Brief wait, then force-kill to avoid zombies */
+		if (waitpid(conn->server_pid, NULL, WNOHANG) == 0) {
+			usleep(100000); /* 100ms grace */
+			if (waitpid(conn->server_pid, NULL, WNOHANG) == 0) {
+				kill(conn->server_pid, SIGKILL);
+				waitpid(conn->server_pid, NULL, 0);
+			}
+		}
 		conn->server_pid = -1;
 	}
 
@@ -477,22 +569,75 @@ mcp_find_connection(struct mcp_client *client, const char *server_name)
 	return (NULL);
 }
 
+/* Write all bytes, handling partial writes. Returns 0 on success, -1 on error. */
+static int
+mcp_write_all(int fd, const char *data, size_t len)
+{
+	ssize_t	 n;
+	size_t	 off = 0;
+
+	while (off < len) {
+		n = write(fd, data + off, len - off);
+		if (n < 0) {
+			if (errno == EINTR)
+				continue;
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				continue;
+			return (-1);
+		}
+		off += n;
+	}
+	return (0);
+}
+
 /* Send data via appropriate transport */
 static ssize_t
 mcp_send(struct mcp_connection *conn, const char *data, size_t len)
 {
-	ssize_t	n;
+	int	fd;
 
+	if (conn->config->transport == MCP_TRANSPORT_STDIO)
+		fd = conn->stdin_fd;
+	else
+		fd = conn->socket_fd;
+
+	if (fd < 0)
+		return (-1);
+
+	if (mcp_write_all(fd, data, len) < 0)
+		return (-1);
+
+	/* Stdio JSON-RPC: terminate with newline */
 	if (conn->config->transport == MCP_TRANSPORT_STDIO) {
-		/* Stdio: write to stdin, add newline for JSON-RPC */
-		n = write(conn->stdin_fd, data, len);
-		if (n > 0)
-			write(conn->stdin_fd, "\n", 1);
-		return (n);
-	} else {
-		/* Socket: direct write */
-		return write(conn->socket_fd, data, len);
+		if (mcp_write_all(fd, "\n", 1) < 0)
+			return (-1);
 	}
+
+	return ((ssize_t)len);
+}
+
+/* Grow read buffer if needed. Returns 0 on success, -1 on failure. */
+static int
+mcp_grow_read_buffer(struct mcp_connection *conn)
+{
+	size_t	 new_size;
+	char	*new_buf;
+
+	/* Cap at MCP_MAX_MESSAGE_SIZE */
+	if (conn->read_buffer_size >= MCP_MAX_MESSAGE_SIZE)
+		return (-1);
+
+	new_size = conn->read_buffer_size * 2;
+	if (new_size > MCP_MAX_MESSAGE_SIZE)
+		new_size = MCP_MAX_MESSAGE_SIZE;
+
+	new_buf = realloc(conn->read_buffer, new_size);
+	if (new_buf == NULL)
+		return (-1);
+
+	conn->read_buffer = new_buf;
+	conn->read_buffer_size = new_size;
+	return (0);
 }
 
 /* Receive data via appropriate transport */
@@ -508,47 +653,49 @@ mcp_recv(struct mcp_connection *conn, char *buffer, size_t size)
 	if (conn->config->transport == MCP_TRANSPORT_STDIO) {
 		/* Stdio: read until we have a complete JSON-RPC response */
 		while (1) {
-			/* Read more data if buffer has space */
-			if (conn->read_buffer_len < conn->read_buffer_size - 1) {
-				/* Use select() to wait for data with timeout */
-				FD_ZERO(&readfds);
-				FD_SET(conn->stdout_fd, &readfds);
-				timeout.tv_sec = MCP_SOCKET_TIMEOUT / 1000;
-				timeout.tv_usec = (MCP_SOCKET_TIMEOUT % 1000) * 1000;
-
-				ret = select(conn->stdout_fd + 1, &readfds, NULL, NULL,
-				    &timeout);
-				if (ret < 0) {
-					/* select error */
-					return (-1);
-				} else if (ret == 0) {
-					/* Timeout - no data available */
-					if (conn->read_buffer_len == 0)
-						return (-1);
-					break;
-				}
-
-				/* Data is available, read it */
-				n = read(conn->stdout_fd,
-				    conn->read_buffer + conn->read_buffer_len,
-				    conn->read_buffer_size - conn->read_buffer_len - 1);
-
-				if (n > 0) {
-					conn->read_buffer_len += n;
-					conn->read_buffer[conn->read_buffer_len] = '\0';
-				} else if (n == 0) {
-					/* EOF */
-					break;
-				} else if (errno != EAGAIN && errno != EWOULDBLOCK) {
-					/* Error */
-					return (-1);
-				}
+			/* Grow buffer if full */
+			if (conn->read_buffer_len >= conn->read_buffer_size - 1) {
+				if (mcp_grow_read_buffer(conn) < 0)
+					return (-1); /* Hit size limit */
 			}
 
-			/* Look for complete JSON-RPC response (ends with newline) */
+			/* Use select() to wait for data with timeout */
+			FD_ZERO(&readfds);
+			FD_SET(conn->stdout_fd, &readfds);
+			timeout.tv_sec = MCP_SOCKET_TIMEOUT / 1000;
+			timeout.tv_usec = (MCP_SOCKET_TIMEOUT % 1000) * 1000;
+
+			ret = select(conn->stdout_fd + 1, &readfds, NULL,
+			    NULL, &timeout);
+			if (ret < 0) {
+				if (errno == EINTR)
+					continue;
+				return (-1);
+			} else if (ret == 0) {
+				/* Timeout */
+				if (conn->read_buffer_len == 0)
+					return (-1);
+				break;
+			}
+
+			/* Data is available, read it */
+			n = read(conn->stdout_fd,
+			    conn->read_buffer + conn->read_buffer_len,
+			    conn->read_buffer_size - conn->read_buffer_len - 1);
+
+			if (n > 0) {
+				conn->read_buffer_len += n;
+				conn->read_buffer[conn->read_buffer_len] = '\0';
+			} else if (n == 0) {
+				/* EOF */
+				break;
+			} else if (errno != EAGAIN && errno != EWOULDBLOCK) {
+				return (-1);
+			}
+
+			/* Look for complete JSON-RPC response (newline) */
 			newline = strchr(conn->read_buffer, '\n');
 			if (newline != NULL) {
-				/* Found complete response */
 				*newline = '\0';
 				n = newline - conn->read_buffer;
 
@@ -559,7 +706,8 @@ mcp_recv(struct mcp_connection *conn, char *buffer, size_t size)
 				buffer[n] = '\0';
 
 				/* Remove from read buffer */
-				conn->read_buffer_len -= (newline - conn->read_buffer + 1);
+				conn->read_buffer_len -=
+				    (newline - conn->read_buffer + 1);
 				if (conn->read_buffer_len > 0) {
 					memmove(conn->read_buffer, newline + 1,
 					    conn->read_buffer_len);
@@ -568,10 +716,6 @@ mcp_recv(struct mcp_connection *conn, char *buffer, size_t size)
 
 				return (n);
 			}
-
-			/* Need more data - try again */
-			if (n <= 0)
-				break;
 		}
 
 		return (-1);
@@ -654,83 +798,6 @@ mcp_call_tool(struct mcp_client *client, const char *server_name,
 	resp = mcp_parse_response(buffer);
 
 	return (resp);
-}
-
-/* List available tools */
-struct mcp_response *
-mcp_list_tools(struct mcp_client *client, const char *server_name)
-{
-	struct mcp_connection	*conn;
-	struct mcp_response	*resp;
-	char			*request;
-	char			 buffer[MCP_MAX_MESSAGE_SIZE];
-	ssize_t			 n;
-
-	/* Find and ensure connected */
-	conn = mcp_find_connection(client, server_name);
-	if (conn == NULL)
-		return (NULL);
-
-	if (conn->state != MCP_CONNECTED) {
-		if (mcp_connect_server(client, server_name) < 0)
-			return (NULL);
-	}
-
-	/* Build request for tools/list */
-	request = mcp_build_request(conn->request_id++, "tools/list", NULL);
-
-	/* Send request */
-	n = mcp_send(conn, request, strlen(request));
-	free(request);
-
-	if (n < 0) {
-		conn->errors++;
-		conn->state = MCP_ERROR;
-		return (NULL);
-	}
-
-	conn->requests_sent++;
-	conn->last_activity = time(NULL);
-
-	/* Read response */
-	memset(buffer, 0, sizeof buffer);
-	n = mcp_recv(conn, buffer, sizeof buffer);
-	if (n < 0) {
-		conn->errors++;
-		conn->state = MCP_ERROR;
-		return (NULL);
-	}
-
-	conn->responses_received++;
-	conn->last_activity = time(NULL);
-
-	/* Parse response */
-	resp = mcp_parse_response(buffer);
-
-	return (resp);
-}
-
-/* Check if connection is healthy */
-int
-mcp_connection_healthy(struct mcp_connection *conn)
-{
-	time_t	now;
-
-	if (conn == NULL)
-		return (0);
-
-	if (conn->state != MCP_CONNECTED)
-		return (0);
-
-	if (conn->socket_fd < 0)
-		return (0);
-
-	/* Check for timeout (5 seconds) */
-	now = time(NULL);
-	if (now - conn->last_activity > MCP_SOCKET_TIMEOUT / 1000)
-		return (0);
-
-	return (1);
 }
 
 /* Get state string */
