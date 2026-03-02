@@ -3,8 +3,8 @@
 [![Version](https://img.shields.io/badge/version-next--3.7-blue.svg)](https://github.com/marc-shade/tmux)
 [![License](https://img.shields.io/badge/license-ISC-green.svg)](COPYING)
 [![Build Status](https://img.shields.io/badge/build-passing-success.svg)]()
-[![Phase](https://img.shields.io/badge/phase-4.4%20complete-brightgreen.svg)](AGENTIC_FEATURES.md)
-[![Commands](https://img.shields.io/badge/commands-108%20total%20%7C%2012%20agentic-informational.svg)]()
+[![Phase](https://img.shields.io/badge/phase-5.0%20complete-brightgreen.svg)](AGENTIC_FEATURES.md)
+[![Commands](https://img.shields.io/badge/commands-111%20total%20%7C%2015%20agentic-informational.svg)]()
 
 **tmux** is a terminal multiplexer that enables multiple terminals to be created, accessed, and controlled from a single screen. This fork adds **native Model Context Protocol (MCP) integration** and **agentic AI workflow support** for advanced AI-assisted development workflows.
 
@@ -53,6 +53,20 @@ tmux agent-peers                    # List peers and shared context
 # Get optimization recommendations
 tmux agent-optimize -s auto
 
+# Send notifications between agent sessions
+tmux agent-notify -g oauth-team -m "found critical pattern"
+tmux agent-notify -t dev-oauth -m "update dependency"
+
+# View agent dashboard
+tmux agent-dashboard        # Full dashboard with all sessions
+tmux agent-dashboard -s     # Summary only
+
+# Use tmux as an MCP server (for AI tools to control tmux)
+tmux mcp-serve              # Start JSON-RPC 2.0 MCP server on stdio
+
+# Use agent format strings in your status bar
+# set -g status-right '#{agent_type}: #{agent_goal} [#{agent_tasks} tasks]'
+
 # Session auto-saves on detach, auto-restores on attach
 tmux detach-client
 tmux attach-session -t oauth-research  # Restores full context
@@ -91,7 +105,7 @@ tmux -V
 # Should show: tmux next-3.7
 
 tmux list-commands | grep -E "(agent|mcp|template)"
-# Should show 12 agentic commands
+# Should show 15 agentic commands
 ```
 
 ## 📖 Documentation
@@ -160,6 +174,8 @@ tmux list-agent-groups
 | **mcp-socket.c** | Unix domain socket transport with non-blocking I/O |
 | **session-agent.c/h** | Session-agent lifecycle management and coordination |
 | **session-mcp-integration.c** | Enhanced-memory and agent-runtime-mcp integration |
+| **mcp-server.c/h** | tmux as MCP server (JSON-RPC 2.0, 7 tools) |
+| **mcp-events.c/h** | Event-driven MCP hooks for agent lifecycle |
 | **session-template.c** | Built-in session templates (research, development, simple) |
 | **agent-manager.c** | Global agent coordination |
 | **agent-analytics.c** | Performance analytics engine with per-type metrics |
@@ -168,22 +184,42 @@ tmux list-agent-groups
 | **context-semantic.c** | Semantic context extraction with relevance scoring |
 | **context-compress.c** | Context compression via deduplication and filtering |
 
-### Agentic Commands (12)
+### Agentic Commands (15)
 
 | Command | Alias | Description |
 |---------|-------|-------------|
 | `show-agent` | | Display agent metadata for a session |
 | `mcp-query` | | Query MCP servers directly |
 | `mcp-stats` | | Display MCP connection and performance statistics |
-| `agent-analytics` | | View session performance analytics |
+| `mcp-serve` | | Run tmux as an MCP server (JSON-RPC 2.0, 7 tools) |
+| `agent-analytics` | `aanalytics` | View session performance analytics |
 | `agent-optimize` | `optim` | Get optimization recommendations |
 | `agent-join-group` | `ajoin` | Join a coordination group |
 | `agent-leave-group` | `aleave` | Leave a coordination group |
 | `agent-share` | `ashare` | Share key-value context with group |
 | `agent-peers` | `apeers` | List peers and shared context |
+| `agent-notify` | `anotify` | Send messages to group peers or specific sessions |
+| `agent-dashboard` | `adash` | View agent summary, session table, and groups |
 | `list-agent-groups` | `lsag` | List all coordination groups |
 | `list-templates` | `lst` | List available session templates |
 | `new-from-template` | `newt` | Create session from template |
+
+### Agent Format Strings (10)
+
+Use these in your status bar or format strings:
+
+| Variable | Description |
+|----------|-------------|
+| `#{agent_type}` | Agent type (research, development, etc.) |
+| `#{agent_goal}` | Session goal description |
+| `#{agent_tasks}` | Tasks completed count |
+| `#{agent_interactions}` | Interaction count |
+| `#{agent_runtime_id}` | Agent runtime goal ID |
+| `#{agent_group}` | Coordination group name |
+| `#{agent_peers}` | Number of peers in group |
+| `#{agent_is_coordinator}` | Whether session is group coordinator |
+| `#{agent_context_saved}` | Whether context has been saved |
+| `#{agent_duration}` | Session duration in human-readable format |
 
 ### Agent Metadata Structure
 
@@ -317,6 +353,14 @@ See [TESTING_RESULTS.md](TESTING_RESULTS.md) and [PHASE_4.1_FEATURES.md](PHASE_4
 - [x] Workflow optimization with 4 strategies (agent-optimizer.c, 380 lines)
 - [x] `agent-optimize` command with strategy selection
 
+### ✅ Phase 5.0: Deep Agentic Integration (Complete - 2026-03-02)
+- [x] **MCP Server Mode** (`tmux mcp-serve`) - tmux as JSON-RPC 2.0 MCP server with 7 tools (mcp-server.c/h, 1056 lines)
+- [x] **Agent Format Strings** - 10 new `#{agent_*}` variables for status bar display (format.c, 133 lines)
+- [x] **Pane Content Pipeline** - Auto-capture and classify scrollback on detach (session-mcp-integration.c, 160 lines)
+- [x] **Event-driven MCP Hooks** - Fire-and-forget events on agent lifecycle changes (mcp-events.c/h, 292 lines)
+- [x] **Inter-session Message Bus** - `agent-notify` for group/direct messaging (cmd-agent-notify.c, 145 lines)
+- [x] **Agent Dashboard** - `agent-dashboard` for summary stats and session table (cmd-agent-dashboard.c, 213 lines)
+
 ### Bug Fixes (2026-03-02)
 - [x] MCP initialize/initialized handshake per JSON-RPC 2.0 spec
 - [x] JSON injection prevention via `json_escape()` in all MCP payloads
@@ -327,7 +371,7 @@ See [TESTING_RESULTS.md](TESTING_RESULTS.md) and [PHASE_4.1_FEATURES.md](PHASE_4
 - [x] Connection health checks cover both socket and stdio transports
 - [x] Proper forward declarations for all static functions
 
-**Total Implementation**: 9,100+ lines of agentic C code across 28 source files
+**Total Implementation**: 11,200+ lines of agentic C code across 35 source files
 
 ## 🤝 Contributing
 

@@ -92,7 +92,7 @@ tmux -V
 # Should show: tmux next-3.7
 
 tmux list-commands | grep -E "(agent|mcp|template)"
-# Should show 12 agentic commands
+# Should show 15 agentic commands
 ```
 
 ## Usage Examples
@@ -168,29 +168,34 @@ tmux show-agent -t test-oauth
 6. **mcp-metrics.c** - Per-server latency tracking (min/max/avg/p95/p99)
 7. **mcp-socket.c** - Unix domain socket transport
 
-**Agent System** (8 files):
+**Agent System** (10 files):
 1. **session-agent.c/h** - Session-agent lifecycle and multi-session coordination
-2. **session-mcp-integration.c** - Enhanced-memory and agent-runtime-mcp hooks
+2. **session-mcp-integration.c/h** - Enhanced-memory, agent-runtime, pane capture pipeline
 3. **session-template.c** - Built-in session templates (research, development, simple)
 4. **agent-manager.c** - Global agent coordination
 5. **agent-analytics.c** - Performance analytics engine
 6. **agent-learning.c** - Pattern recognition from session history
 7. **agent-optimizer.c** - Workflow optimization strategies
 8. **context-semantic.c** / **context-compress.c** - Smart context extraction and compression
+9. **mcp-events.c/h** - Event-driven MCP hooks for agent lifecycle
+10. **mcp-server.c/h** - tmux as MCP server (JSON-RPC 2.0, 7 tools)
 
-**Commands** (12 files):
+**Commands** (15 files):
 1. **cmd-show-agent.c** - Display agent metadata
 2. **cmd-mcp-query.c** - Query MCP servers
 3. **cmd-mcp-stats.c** - MCP connection statistics
-4. **cmd-agent-analytics.c** - Performance analytics
-5. **cmd-agent-optimize.c** - Optimization recommendations
-6. **cmd-agent-join-group.c** - Join coordination group
-7. **cmd-agent-leave-group.c** - Leave coordination group
-8. **cmd-agent-share.c** - Share context with group
-9. **cmd-agent-peers.c** - List peers and shared context
-10. **cmd-list-agent-groups.c** - List coordination groups
-11. **cmd-list-templates.c** - List session templates
-12. **cmd-new-from-template.c** - Create session from template
+4. **cmd-mcp-serve.c** - Run tmux as MCP server
+5. **cmd-agent-analytics.c** - Performance analytics
+6. **cmd-agent-optimize.c** - Optimization recommendations
+7. **cmd-agent-join-group.c** - Join coordination group
+8. **cmd-agent-leave-group.c** - Leave coordination group
+9. **cmd-agent-share.c** - Share context with group
+10. **cmd-agent-peers.c** - List peers and shared context
+11. **cmd-agent-notify.c** - Send messages to group/session
+12. **cmd-agent-dashboard.c** - Agent summary and session table
+13. **cmd-list-agent-groups.c** - List coordination groups
+14. **cmd-list-templates.c** - List session templates
+15. **cmd-new-from-template.c** - Create session from template
 
 ### Data Structures
 
@@ -382,6 +387,39 @@ Tmux automatically loads this configuration on first MCP query.
   - 4 optimization strategies: workflow, performance, efficiency, quality
   - `agent-optimize` command with auto-strategy selection
 
+### ✅ Completed (Phase 5.0 - Deep Agentic Integration)
+
+- [x] **MCP Server Mode** - COMPLETED
+  - tmux as JSON-RPC 2.0 MCP server via `tmux mcp-serve`
+  - 7 tools: list_sessions, capture_pane, send_keys, get_analytics, get_coordination, create_agent_session, notify_session
+  - Stdio transport for integration with AI tools (~/.claude.json)
+  - Implemented in mcp-server.c/h, cmd-mcp-serve.c (1056 lines)
+- [x] **Agent Format Strings** - COMPLETED
+  - 10 new `#{agent_*}` format variables for status bar display
+  - Variables: type, goal, tasks, interactions, runtime_id, group, peers, is_coordinator, context_saved, duration
+  - Added to format.c format_table[] (133 lines)
+- [x] **Pane Content Pipeline** - COMPLETED
+  - Automatic capture of scrollback on detach
+  - Line classification: commands, errors, files, output
+  - Semantic extraction and compression
+  - Saved to enhanced-memory as pane_context entities
+  - Implemented in session-mcp-integration.c (160 lines)
+- [x] **Event-driven MCP Hooks** - COMPLETED
+  - Fire-and-forget events to enhanced-memory on lifecycle changes
+  - Events: agent_created, agent_completed, agent_group_changed, context_saved, session_attached, session_detached
+  - Implemented in mcp-events.c/h (292 lines)
+- [x] **Inter-session Message Bus** - COMPLETED
+  - `agent-notify` / `anotify` command
+  - Group notification: `-g <group> -m "message"` (sends to all peers)
+  - Direct notification: `-t <session> -m "message"`
+  - Display via status bar messages
+  - Implemented in cmd-agent-notify.c (145 lines)
+- [x] **Agent Dashboard** - COMPLETED
+  - `agent-dashboard` / `adash` command
+  - Summary stats, agent session table, coordination groups
+  - `-s` flag for summary-only mode
+  - Implemented in cmd-agent-dashboard.c (213 lines)
+
 ### Bug Fixes (2026-03-02)
 
 - [x] MCP initialize/initialized handshake per JSON-RPC 2.0 spec
@@ -392,7 +430,7 @@ Tmux automatically loads this configuration on first MCP query.
 - [x] Socket timeout reduced from 5s to 2s
 - [x] Connection health checks cover both socket and stdio transports
 
-**Total Implementation**: 9,100+ lines of agentic C code across 28 source files
+**Total Implementation**: 11,200+ lines of agentic C code across 35 source files
 
 ## Testing
 
@@ -443,7 +481,7 @@ tmux -V
 
 # Verify agentic commands are available
 tmux list-commands | grep -cE "(agent|mcp|template)"
-# Should show: 12
+# Should show: 15
 
 # If commands missing, kill server and retry
 tmux kill-server
