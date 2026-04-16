@@ -828,6 +828,9 @@ control_stop(struct client *c)
 	struct control_block	*cb, *cb1;
 	struct control_sub	*csub, *csub1;
 
+	if (cs == NULL)
+		return;
+
 	if (~c->flags & CLIENT_CONTROLCONTROL)
 		bufferevent_free(cs->write_event);
 	bufferevent_free(cs->read_event);
@@ -841,6 +844,7 @@ control_stop(struct client *c)
 		control_free_block(cs, cb);
 	control_reset_offsets(c);
 
+	c->control_state = NULL;
 	free(cs);
 }
 
@@ -1044,6 +1048,9 @@ control_check_subs_timer(__unused int fd, __unused short events, void *data)
 
 	log_debug("%s: timer fired", __func__);
 	evtimer_add(&cs->subs_timer, &tv);
+
+	if (s == NULL)
+		return;
 
 	/* Find which subscription types are present. */
 	RB_FOREACH(csub, control_subs, &cs->subs) {

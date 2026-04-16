@@ -357,7 +357,7 @@ sixel_parse(const char *buf, size_t len, u_int p2, u_int xpixel, u_int ypixel)
 	return (si);
 
 bad:
-	free(si);
+	sixel_free(si);
 	return (NULL);
 }
 
@@ -487,9 +487,9 @@ static void
 sixel_print_add(char **buf, size_t *len, size_t *used, const char *s,
     size_t slen)
 {
-	if (*used + slen >= *len + 1) {
+	while (*used + slen >= *len + 1) {
+		*buf = xreallocarray(*buf, 2, *len);
 		(*len) *= 2;
-		*buf = xrealloc(*buf, *len);
 	}
 	memcpy(*buf + *used, s, slen);
 	(*used) += slen;

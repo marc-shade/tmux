@@ -91,7 +91,7 @@ static const char *options_table_window_size_list[] = {
 	"largest", "smallest", "manual", "latest", NULL
 };
 static const char *options_table_remain_on_exit_list[] = {
-	"off", "on", "failed", NULL
+	"off", "on", "failed", "key", NULL
 };
 static const char *options_table_destroy_unattached_list[] = {
 	"off", "on", "keep-last", "keep-group", NULL
@@ -141,7 +141,7 @@ static const char *options_table_allow_passthrough_list[] = {
 		"#{T:window-status-format}" \
 		"#[pop-default]" \
 		"#[norange default]" \
-		"#{?loop_last_flag,,#{window-status-separator}}" \
+		"#{?loop_last_flag,,#{E:window-status-separator}}" \
 	"," \
 		"#[range=window|#{window_index} list=focus " \
 			"#{?#{!=:#{E:window-status-current-style},default}," \
@@ -168,7 +168,7 @@ static const char *options_table_allow_passthrough_list[] = {
 		"#{T:window-status-current-format}" \
 		"#[pop-default]" \
 		"#[norange list=on default]" \
-		"#{?loop_last_flag,,#{window-status-separator}}" \
+		"#{?loop_last_flag,,#{E:window-status-separator}}" \
 	"}" \
 	"#[nolist align=right range=right #{E:status-right-style}]" \
 	"#[push-default]" \
@@ -414,10 +414,10 @@ const struct options_table_entry options_table[] = {
 	  .choices = options_table_get_clipboard_list,
 	  .default_num = 1,
 	  .text = "When an application requests the clipboard, whether to "
-	          "ignore the request ('off'); respond with the newest buffer "
-	          "('buffer'); request the clipboard from the most recently "
-	          "used terminal ('request'); or to request the clipboard, "
-	          "create a buffer, and send it to the application ('both')."
+		  "ignore the request ('off'); respond with the newest buffer "
+		  "('buffer'); request the clipboard from the most recently "
+		  "used terminal ('request'); or to request the clipboard, "
+		  "create a buffer, and send it to the application ('both')."
 	},
 
 	{ .name = "history-file",
@@ -723,11 +723,22 @@ const struct options_table_entry options_table[] = {
 	{ .name = "message-command-style",
 	  .type = OPTIONS_TABLE_STRING,
 	  .scope = OPTIONS_TABLE_SESSION,
-	  .default_str = "bg=black,fg=yellow",
+	  .default_str = "bg=black,fg=yellow,fill=black",
 	  .flags = OPTIONS_TABLE_IS_STYLE,
 	  .separator = ",",
 	  .text = "Style of the command prompt when in command mode, if "
 		  "'mode-keys' is set to 'vi'."
+	},
+
+	{ .name = "message-format",
+	  .type = OPTIONS_TABLE_STRING,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .default_str = "#[#{?#{command_prompt},"
+		  "#{E:message-command-style},"
+		  "#{E:message-style}}]"
+		  "#{message}",
+	  .text = "Format string for the prompt and message area. "
+		  "The '#{message}' placeholder is replaced with the content."
 	},
 
 	{ .name = "message-line",
@@ -741,10 +752,13 @@ const struct options_table_entry options_table[] = {
 	{ .name = "message-style",
 	  .type = OPTIONS_TABLE_STRING,
 	  .scope = OPTIONS_TABLE_SESSION,
-	  .default_str = "bg=yellow,fg=black",
+	  .default_str = "bg=yellow,fg=black,fill=yellow",
 	  .flags = OPTIONS_TABLE_IS_STYLE,
 	  .separator = ",",
-	  .text = "Style of messages and the command prompt."
+	  .text = "Style of messages and the command prompt. "
+		  "A 'fill' attribute controls background clearing and "
+		  "a 'width' attribute (fixed or percentage) constrains "
+		  "the prompt area width."
 	},
 
 	{ .name = "mouse",
@@ -1010,7 +1024,8 @@ const struct options_table_entry options_table[] = {
 	  .scope = OPTIONS_TABLE_SESSION,
 	  .flags = OPTIONS_TABLE_IS_ARRAY,
 	  .default_str = "DISPLAY KRB5CCNAME MSYSTEM SSH_ASKPASS SSH_AUTH_SOCK "
-			 "SSH_AGENT_PID SSH_CONNECTION WINDOWID XAUTHORITY",
+			 "SSH_AGENT_PID SSH_CONNECTION WAYLAND_DISPLAY "
+			 "WINDOWID XAUTHORITY",
 	  .text = "List of environment variables to update in the session "
 		  "environment when a client is attached."
 	},
@@ -1393,8 +1408,9 @@ const struct options_table_entry options_table[] = {
 	  .scope = OPTIONS_TABLE_WINDOW|OPTIONS_TABLE_PANE,
 	  .choices = options_table_remain_on_exit_list,
 	  .default_num = 0,
-	  .text = "Whether panes should remain ('on') or be automatically "
-		  "killed ('off' or 'failed') when the program inside exits."
+	  .text = "Whether panes should remain ('on'), remain until a key is "
+		  "pressed ('key') or be automatically killed ('off' or "
+		  "'failed') when the program inside exits."
 	},
 
 	{ .name = "remain-on-exit-format",

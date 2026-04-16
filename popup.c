@@ -104,6 +104,27 @@ static const struct menu_item popup_internal_menu_items[] = {
 };
 
 static void
+popup_free(struct popup_data *pd)
+{
+	server_client_unref(pd->c);
+
+	if (pd->job != NULL)
+		job_free(pd->job);
+	input_free(pd->ictx);
+
+	free(pd->or[0].ranges);
+	free(pd->or[1].ranges);
+	free(pd->r.ranges);
+	screen_free(&pd->s);
+	colour_palette_free(&pd->palette);
+
+	free(pd->title);
+	free(pd->style);
+	free(pd->border_style);
+	free(pd);
+}
+
+static void
 popup_reapply_styles(struct popup_data *pd)
 {
 	struct client		*c = pd->c;
@@ -279,6 +300,10 @@ popup_draw_cb(struct client *c, void *data, struct screen_redraw_ctx *rctx)
 	popup_reapply_styles(pd);
 
 	screen_init(&s, pd->sx, pd->sy, 0);
+	if (pd->s.hyperlinks != NULL) {
+		hyperlinks_free(s.hyperlinks);
+		s.hyperlinks = hyperlinks_copy(pd->s.hyperlinks);
+	}
 	screen_write_start(&ctx, &s);
 	screen_write_clearscreen(&ctx, 8);
 
@@ -339,22 +364,8 @@ popup_free_cb(struct client *c, void *data)
 			cmdq_get_client(item)->retval = pd->status;
 		cmdq_continue(item);
 	}
-	server_client_unref(pd->c);
 
-	if (pd->job != NULL)
-		job_free(pd->job);
-	input_free(pd->ictx);
-
-	free(pd->or[0].ranges);
-	free(pd->or[1].ranges);
-	free(pd->r.ranges);
-	screen_free(&pd->s);
-	colour_palette_free(&pd->palette);
-
-	free(pd->title);
-	free(pd->style);
-	free(pd->border_style);
-	free(pd);
+	popup_free(pd);
 }
 
 static void
@@ -847,14 +858,37 @@ popup_display(int flags, enum box_lines lines, struct cmdq_item *item, u_int px,
 	pd->psx = sx;
 	pd->psy = sy;
 
-	pd->job = job_run(shellcmd, argc, argv, env, s, cwd,
-	    popup_job_update_cb, popup_job_complete_cb, NULL, pd,
-	    JOB_NOWAIT|JOB_PTY|JOB_KEEPWRITE|JOB_DEFAULTSHELL, jx, jy);
-	pd->ictx = input_init(NULL, job_get_event(pd->job), &pd->palette, c);
+	if (flags & POPUP_NOJOB)
+		pd->ictx = input_init(NULL, NULL, &pd->palette, NULL);
+	else {
+		pd->job = job_run(shellcmd, argc, argv, env, s, cwd,
+		    popup_job_update_cb, popup_job_complete_cb, NULL, pd,
+		    JOB_NOWAIT|JOB_PTY|JOB_KEEPWRITE|JOB_DEFAULTSHELL, jx, jy);
+		if (pd->job == NULL) {
+			popup_free(pd);
+			return (-1);
+		}
+		pd->ictx = input_init(NULL, job_get_event(pd->job),
+		    &pd->palette, c);
+	}
 
 	server_client_set_overlay(c, 0, popup_check_cb, popup_mode_cb,
 	    popup_draw_cb, popup_key_cb, popup_free_cb, popup_resize_cb, pd);
 	return (0);
+}
+
+void
+popup_write(struct client *c, const char *data, size_t size)
+{
+	struct popup_data	*pd = c->overlay_data;
+
+	if (!popup_present(c))
+		return;
+	c->overlay_check = NULL;
+	c->overlay_data = NULL;
+	input_parse_screen(pd->ictx, &pd->s, popup_init_ctx_cb, pd, data, size);
+	c->overlay_check = popup_check_cb;
+	c->overlay_data = pd;
 }
 
 static void

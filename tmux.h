@@ -133,18 +133,6 @@ struct winlink;
 #define VISUAL_ON 1
 #define VISUAL_BOTH 2
 
-/* No key or unknown key. */
-#define KEYC_NONE            0x000ff000000000ULL
-#define KEYC_UNKNOWN         0x000fe000000000ULL
-
-/*
- * Base for special (that is, not Unicode) keys. An enum must be at most a
- * signed int, so these are based in the highest Unicode PUA.
- */
-#define KEYC_BASE            0x0000000010e000ULL
-#define KEYC_USER            0x0000000010f000ULL
-#define KEYC_USER_END	     (KEYC_USER + KEYC_NUSER)
-
 /* Key modifier bits. */
 #define KEYC_META            0x00100000000000ULL
 #define KEYC_CTRL            0x00200000000000ULL
@@ -160,45 +148,122 @@ struct winlink;
 #define KEYC_SENT	     0x40000000000000ULL
 
 /* Masks for key bits. */
-#define KEYC_MASK_MODIFIERS  0x00f00000000000ULL
+#define KEYC_MASK_TYPE       0x0000ff00000000ULL
+#define KEYC_MASK_MODIFIERS  0x00ff0000000000ULL
 #define KEYC_MASK_FLAGS      0xff000000000000ULL
-#define KEYC_MASK_KEY        0x000fffffffffffULL
+#define KEYC_MASK_KEY        0x0000ffffffffffULL
 
-/* Available user keys. */
-#define KEYC_NUSER 1000
+#define KEYC_NUSER           1000
+#define KEYC_SHIFT_TYPE(t)   ((unsigned long long)(t) << 32)
+#define KEYC_IS_TYPE(k, t)   (((k) & KEYC_MASK_TYPE) == KEYC_SHIFT_TYPE(t))
+enum key_code_type {
+	KEYC_TYPE_UNICODE,
+	KEYC_TYPE_USER,
+	KEYC_TYPE_FUNCTION,
+	KEYC_TYPE_MOUSEMOVE,
+	KEYC_TYPE_MOUSEDOWN,
+	KEYC_TYPE_MOUSEUP,
+	KEYC_TYPE_MOUSEDRAG,
+	KEYC_TYPE_MOUSEDRAGEND,
+	KEYC_TYPE_WHEELDOWN,
+	KEYC_TYPE_WHEELUP,
+	KEYC_TYPE_SECONDCLICK,
+	KEYC_TYPE_DOUBLECLICK,
+	KEYC_TYPE_TRIPLECLICK,
+	KEYC_TYPE_NOTYPE /* end */
+};
 
-/* Is this a mouse key? */
-#define KEYC_IS_MOUSE(key) \
-	(((key) & KEYC_MASK_KEY) >= KEYC_MOUSE && \
-	 ((key) & KEYC_MASK_KEY) < KEYC_BSPACE)
+enum key_code_mouse_location {
+	KEYC_MOUSE_LOCATION_PANE,
+	KEYC_MOUSE_LOCATION_STATUS,
+	KEYC_MOUSE_LOCATION_STATUS_LEFT,
+	KEYC_MOUSE_LOCATION_STATUS_RIGHT,
+	KEYC_MOUSE_LOCATION_STATUS_DEFAULT,
+	KEYC_MOUSE_LOCATION_BORDER,
+	KEYC_MOUSE_LOCATION_SCROLLBAR_UP,
+	KEYC_MOUSE_LOCATION_SCROLLBAR_SLIDER,
+	KEYC_MOUSE_LOCATION_SCROLLBAR_DOWN,
+	KEYC_MOUSE_LOCATION_CONTROL0, /* keep order */
+	KEYC_MOUSE_LOCATION_CONTROL1,
+	KEYC_MOUSE_LOCATION_CONTROL2,
+	KEYC_MOUSE_LOCATION_CONTROL3,
+	KEYC_MOUSE_LOCATION_CONTROL4,
+	KEYC_MOUSE_LOCATION_CONTROL5,
+	KEYC_MOUSE_LOCATION_CONTROL6,
+	KEYC_MOUSE_LOCATION_CONTROL7,
+	KEYC_MOUSE_LOCATION_CONTROL8,
+	KEYC_MOUSE_LOCATION_CONTROL9,
+	KEYC_MOUSE_LOCATION_NOWHERE /* end */
+};
 
 /* Is this a Unicode key? */
 #define KEYC_IS_UNICODE(key) \
-	(((key) & KEYC_MASK_KEY) > 0x7f && \
-	 (((key) & KEYC_MASK_KEY) < KEYC_BASE || \
-	  ((key) & KEYC_MASK_KEY) >= KEYC_BASE_END) && \
-	 (((key) & KEYC_MASK_KEY) < KEYC_USER || \
-	  ((key) & KEYC_MASK_KEY) >= KEYC_USER_END))
+	(((key) & KEYC_MASK_TYPE) == KEYC_SHIFT_TYPE(KEYC_TYPE_UNICODE) && \
+	 ((key) & KEYC_MASK_KEY) > 0x7f)
+
+/* Is this a user key? */
+#define KEYC_IS_USER(key) \
+	(((key) & KEYC_MASK_TYPE) == KEYC_SHIFT_TYPE(KEYC_TYPE_USER))
+
+/* Is this a function key? */
+#define KEYC_IS_SPECIAL(key) \
+	(((key) & KEYC_MASK_TYPE) == KEYC_SHIFT_TYPE(KEYC_TYPE_FUNCTION))
+
+/* Is this a mouse key? */
+#define KEYC_IS_MOUSE(key) \
+	(((key) & KEYC_MASK_KEY) == KEYC_MOUSE || \
+	 (((key) & KEYC_MASK_TYPE) >= KEYC_SHIFT_TYPE(KEYC_TYPE_MOUSEMOVE) && \
+	  ((key) & KEYC_MASK_TYPE) <= KEYC_SHIFT_TYPE(KEYC_TYPE_TRIPLECLICK)))
 
 /* Is this a paste key? */
 #define KEYC_IS_PASTE(key) \
-	(((key) & KEYC_MASK_KEY) == KEYC_PASTE_START || \
-	 ((key) & KEYC_MASK_KEY) == KEYC_PASTE_END)
+	(((key) & KEYC_MASK_TYPE) == KEYC_SHIFT_TYPE(KEYC_TYPE_FUNCTION) && \
+	 (((key) & KEYC_MASK_KEY) == KEYC_PASTE_START || \
+	 ((key) & KEYC_MASK_KEY) == KEYC_PASTE_END))
 
 /* Multiple click timeout. */
 #define KEYC_CLICK_TIMEOUT 300
 
+/* Bit shift for mouse events. */
+#define KEYC_MOUSE_LOCATION_SHIFT  0
+#define KEYC_MOUSE_BUTTON_SHIFT 8
+
 /* Mouse key codes. */
-#define KEYC_MOUSE_KEY(name)		    \
-	KEYC_ ## name ## _PANE,		    \
-	KEYC_ ## name ## _STATUS,	    \
-	KEYC_ ## name ## _STATUS_LEFT,	    \
-	KEYC_ ## name ## _STATUS_RIGHT,	    \
-	KEYC_ ## name ## _STATUS_DEFAULT,   \
-	KEYC_ ## name ## _SCROLLBAR_UP,	    \
-	KEYC_ ## name ## _SCROLLBAR_SLIDER, \
-	KEYC_ ## name ## _SCROLLBAR_DOWN,   \
-	KEYC_ ## name ## _BORDER
+#define KEYC_MOUSE_KEYS(t)                                             \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, PANE),             \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, STATUS),           \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, STATUS_LEFT),      \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, STATUS_RIGHT),     \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, STATUS_DEFAULT),   \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, BORDER),           \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, SCROLLBAR_UP),     \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, SCROLLBAR_SLIDER), \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, SCROLLBAR_DOWN),   \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, CONTROL0),         \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, CONTROL1),         \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, CONTROL2),         \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, CONTROL3),         \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, CONTROL4),         \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, CONTROL5),         \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, CONTROL6),         \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, CONTROL7),         \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, CONTROL8),         \
+	KEYC_MOUSE_KEY(KEYC_ ## t, KEYC_TYPE_ ## t, CONTROL9)
+#define KEYC_MOUSE_KEY(p, t, l)                                                \
+	p ## _ ## l = KEYC_MAKE_MOUSE_KEY(t, 0, KEYC_MOUSE_LOCATION_ ## l),    \
+	p ## 1_ ## l = KEYC_MAKE_MOUSE_KEY(t, 1, KEYC_MOUSE_LOCATION_ ## l),   \
+	p ## 2_ ## l = KEYC_MAKE_MOUSE_KEY(t, 2, KEYC_MOUSE_LOCATION_ ## l),   \
+	p ## 3_ ## l = KEYC_MAKE_MOUSE_KEY(t, 3, KEYC_MOUSE_LOCATION_ ## l),   \
+	p ## 6_ ## l = KEYC_MAKE_MOUSE_KEY(t, 6, KEYC_MOUSE_LOCATION_ ## l),   \
+	p ## 7_ ## l = KEYC_MAKE_MOUSE_KEY(t, 7, KEYC_MOUSE_LOCATION_ ## l),   \
+	p ## 8_ ## l = KEYC_MAKE_MOUSE_KEY(t, 8, KEYC_MOUSE_LOCATION_ ## l),   \
+	p ## 9_ ## l = KEYC_MAKE_MOUSE_KEY(t, 9, KEYC_MOUSE_LOCATION_ ## l),   \
+	p ## 10_ ## l = KEYC_MAKE_MOUSE_KEY(t, 10, KEYC_MOUSE_LOCATION_ ## l), \
+	p ## 11_ ## l = KEYC_MAKE_MOUSE_KEY(t, 11, KEYC_MOUSE_LOCATION_ ## l)
+#define KEYC_MAKE_MOUSE_KEY(t, b, l)                            \
+	((KEYC_SHIFT_TYPE(t)) |                                 \
+	 ((unsigned long long)(b) << KEYC_MOUSE_BUTTON_SHIFT) |	\
+         ((unsigned long long)(l) << KEYC_MOUSE_LOCATION_SHIFT))
 #define KEYC_MOUSE_STRING(name, s)				      \
 	{ #s "Pane", KEYC_ ## name ## _PANE },			      \
 	{ #s "Status", KEYC_ ## name ## _STATUS },		      \
@@ -208,7 +273,17 @@ struct winlink;
 	{ #s "ScrollbarUp", KEYC_ ## name ## _SCROLLBAR_UP },         \
 	{ #s "ScrollbarSlider", KEYC_ ## name ## _SCROLLBAR_SLIDER }, \
 	{ #s "ScrollbarDown", KEYC_ ## name ## _SCROLLBAR_DOWN },     \
-	{ #s "Border", KEYC_ ## name ## _BORDER }
+	{ #s "Border", KEYC_ ## name ## _BORDER },		      \
+	{ #s "Control0", KEYC_ ## name ## _CONTROL0 },		      \
+	{ #s "Control1", KEYC_ ## name ## _CONTROL1 },		      \
+	{ #s "Control2", KEYC_ ## name ## _CONTROL2 },		      \
+	{ #s "Control3", KEYC_ ## name ## _CONTROL3 },		      \
+	{ #s "Control4", KEYC_ ## name ## _CONTROL4 },		      \
+	{ #s "Control5", KEYC_ ## name ## _CONTROL5 },		      \
+	{ #s "Control6", KEYC_ ## name ## _CONTROL6 },		      \
+	{ #s "Control7", KEYC_ ## name ## _CONTROL7 },		      \
+	{ #s "Control8", KEYC_ ## name ## _CONTROL8 },		      \
+	{ #s "Control9", KEYC_ ## name ## _CONTROL9 }
 
 /*
  * A single key. This can be ASCII or Unicode or one of the keys between
@@ -254,8 +329,15 @@ enum {
 
 /* Special key codes. */
 enum {
+	/* User key code range. */
+	KEYC_USER = KEYC_SHIFT_TYPE(KEYC_TYPE_USER),
+
+	/* Functional key code range. */
+	KEYC_NONE = KEYC_SHIFT_TYPE(KEYC_TYPE_FUNCTION),
+	KEYC_UNKNOWN,
+
 	/* Focus events. */
-	KEYC_FOCUS_IN = KEYC_BASE,
+	KEYC_FOCUS_IN,
 	KEYC_FOCUS_OUT,
 
 	/* "Any" key, used if not found in key table. */
@@ -264,77 +346,6 @@ enum {
 	/* Paste brackets. */
 	KEYC_PASTE_START,
 	KEYC_PASTE_END,
-
-	/* Mouse keys. */
-	KEYC_MOUSE, /* unclassified mouse event */
-	KEYC_DRAGGING, /* dragging in progress */
-	KEYC_DOUBLECLICK, /* double click complete */
-	KEYC_MOUSE_KEY(MOUSEMOVE),
-	KEYC_MOUSE_KEY(MOUSEDOWN1),
-	KEYC_MOUSE_KEY(MOUSEDOWN2),
-	KEYC_MOUSE_KEY(MOUSEDOWN3),
-	KEYC_MOUSE_KEY(MOUSEDOWN6),
-	KEYC_MOUSE_KEY(MOUSEDOWN7),
-	KEYC_MOUSE_KEY(MOUSEDOWN8),
-	KEYC_MOUSE_KEY(MOUSEDOWN9),
-	KEYC_MOUSE_KEY(MOUSEDOWN10),
-	KEYC_MOUSE_KEY(MOUSEDOWN11),
-	KEYC_MOUSE_KEY(MOUSEUP1),
-	KEYC_MOUSE_KEY(MOUSEUP2),
-	KEYC_MOUSE_KEY(MOUSEUP3),
-	KEYC_MOUSE_KEY(MOUSEUP6),
-	KEYC_MOUSE_KEY(MOUSEUP7),
-	KEYC_MOUSE_KEY(MOUSEUP8),
-	KEYC_MOUSE_KEY(MOUSEUP9),
-	KEYC_MOUSE_KEY(MOUSEUP10),
-	KEYC_MOUSE_KEY(MOUSEUP11),
-	KEYC_MOUSE_KEY(MOUSEDRAG1),
-	KEYC_MOUSE_KEY(MOUSEDRAG2),
-	KEYC_MOUSE_KEY(MOUSEDRAG3),
-	KEYC_MOUSE_KEY(MOUSEDRAG6),
-	KEYC_MOUSE_KEY(MOUSEDRAG7),
-	KEYC_MOUSE_KEY(MOUSEDRAG8),
-	KEYC_MOUSE_KEY(MOUSEDRAG9),
-	KEYC_MOUSE_KEY(MOUSEDRAG10),
-	KEYC_MOUSE_KEY(MOUSEDRAG11),
-	KEYC_MOUSE_KEY(MOUSEDRAGEND1),
-	KEYC_MOUSE_KEY(MOUSEDRAGEND2),
-	KEYC_MOUSE_KEY(MOUSEDRAGEND3),
-	KEYC_MOUSE_KEY(MOUSEDRAGEND6),
-	KEYC_MOUSE_KEY(MOUSEDRAGEND7),
-	KEYC_MOUSE_KEY(MOUSEDRAGEND8),
-	KEYC_MOUSE_KEY(MOUSEDRAGEND9),
-	KEYC_MOUSE_KEY(MOUSEDRAGEND10),
-	KEYC_MOUSE_KEY(MOUSEDRAGEND11),
-	KEYC_MOUSE_KEY(WHEELUP),
-	KEYC_MOUSE_KEY(WHEELDOWN),
-	KEYC_MOUSE_KEY(SECONDCLICK1),
-	KEYC_MOUSE_KEY(SECONDCLICK2),
-	KEYC_MOUSE_KEY(SECONDCLICK3),
-	KEYC_MOUSE_KEY(SECONDCLICK6),
-	KEYC_MOUSE_KEY(SECONDCLICK7),
-	KEYC_MOUSE_KEY(SECONDCLICK8),
-	KEYC_MOUSE_KEY(SECONDCLICK9),
-	KEYC_MOUSE_KEY(SECONDCLICK10),
-	KEYC_MOUSE_KEY(SECONDCLICK11),
-	KEYC_MOUSE_KEY(DOUBLECLICK1),
-	KEYC_MOUSE_KEY(DOUBLECLICK2),
-	KEYC_MOUSE_KEY(DOUBLECLICK3),
-	KEYC_MOUSE_KEY(DOUBLECLICK6),
-	KEYC_MOUSE_KEY(DOUBLECLICK7),
-	KEYC_MOUSE_KEY(DOUBLECLICK8),
-	KEYC_MOUSE_KEY(DOUBLECLICK9),
-	KEYC_MOUSE_KEY(DOUBLECLICK10),
-	KEYC_MOUSE_KEY(DOUBLECLICK11),
-	KEYC_MOUSE_KEY(TRIPLECLICK1),
-	KEYC_MOUSE_KEY(TRIPLECLICK2),
-	KEYC_MOUSE_KEY(TRIPLECLICK3),
-	KEYC_MOUSE_KEY(TRIPLECLICK6),
-	KEYC_MOUSE_KEY(TRIPLECLICK7),
-	KEYC_MOUSE_KEY(TRIPLECLICK8),
-	KEYC_MOUSE_KEY(TRIPLECLICK9),
-	KEYC_MOUSE_KEY(TRIPLECLICK10),
-	KEYC_MOUSE_KEY(TRIPLECLICK11),
 
 	/* Backspace key. */
 	KEYC_BSPACE,
@@ -388,8 +399,22 @@ enum {
 	KEYC_REPORT_DARK_THEME,
 	KEYC_REPORT_LIGHT_THEME,
 
-	/* End of special keys. */
-	KEYC_BASE_END
+	/* Mouse state. */
+	KEYC_MOUSE, /* unclassified mouse event */
+	KEYC_DRAGGING, /* dragging in progress */
+	KEYC_DOUBLECLICK, /* double click complete */
+
+	/* Mouse key code ranges. Must be at the end. */
+	KEYC_MOUSE_KEYS(MOUSEMOVE),
+	KEYC_MOUSE_KEYS(WHEELDOWN),
+	KEYC_MOUSE_KEYS(WHEELUP),
+	KEYC_MOUSE_KEYS(MOUSEDOWN),
+	KEYC_MOUSE_KEYS(MOUSEUP),
+	KEYC_MOUSE_KEYS(MOUSEDRAG),
+	KEYC_MOUSE_KEYS(MOUSEDRAGEND),
+	KEYC_MOUSE_KEYS(SECONDCLICK),
+	KEYC_MOUSE_KEYS(DOUBLECLICK),
+	KEYC_MOUSE_KEYS(TRIPLECLICK),
 };
 
 /* Termcap codes. */
@@ -884,7 +909,8 @@ enum style_range_type {
 	STYLE_RANGE_PANE,
 	STYLE_RANGE_WINDOW,
 	STYLE_RANGE_SESSION,
-	STYLE_RANGE_USER
+	STYLE_RANGE_USER,
+	STYLE_RANGE_CONTROL
 };
 struct style_range {
 	enum style_range_type	 type;
@@ -897,6 +923,12 @@ struct style_range {
 	TAILQ_ENTRY(style_range) entry;
 };
 TAILQ_HEAD(style_ranges, style_range);
+
+/* Ranges connected with a status line. */
+struct style_line_entry {
+	char			*expanded;
+	struct style_ranges	 ranges;
+};
 
 /* Default style width and pad. */
 #define STYLE_WIDTH_DEFAULT -1
@@ -924,6 +956,7 @@ struct style {
 	char			range_string[16];
 
 	int			width;
+	int			width_percentage;
 	int			pad;
 
 	enum style_default_type	default_type;
@@ -953,6 +986,20 @@ enum screen_cursor_style {
 	SCREEN_CURSOR_BLOCK,
 	SCREEN_CURSOR_UNDERLINE,
 	SCREEN_CURSOR_BAR
+};
+
+
+/* Progress bar, OSC 9;4. */
+enum progress_bar_state {
+	PROGRESS_BAR_HIDDEN = 0,
+	PROGRESS_BAR_NORMAL = 1,
+	PROGRESS_BAR_ERROR = 2,
+	PROGRESS_BAR_INDETERMINATE = 3,
+	PROGRESS_BAR_PAUSED = 4
+};
+struct progress_bar {
+	enum progress_bar_state state;
+	int			progress;
 };
 
 /* Virtual screen. */
@@ -996,6 +1043,7 @@ struct screen {
 	struct screen_write_cline	*write_list;
 
 	struct hyperlinks		*hyperlinks;
+	struct progress_bar		 progress_bar;
 };
 
 /* Screen write context. */
@@ -1205,8 +1253,8 @@ struct window_pane {
 #define PANE_DROP 0x2
 #define PANE_FOCUSED 0x4
 #define PANE_VISITED 0x8
-/* 0x10 unused */
-/* 0x20 unused */
+#define PANE_ZOOMED 0x10
+#define PANE_FLOATING 0x20
 #define PANE_INPUTOFF 0x40
 #define PANE_CHANGED 0x80
 #define PANE_EXITED 0x100
@@ -1247,6 +1295,7 @@ struct window_pane {
 	struct grid_cell cached_active_gc;
 	struct colour_palette palette;
 	enum client_theme last_theme;
+	struct style_line_entry border_status_line;
 
 	int		 pipe_fd;
 	pid_t		 pipe_pid;
@@ -1880,10 +1929,6 @@ struct cmd_entry {
 
 /* Status line. */
 #define STATUS_LINES_LIMIT 5
-struct status_line_entry {
-	char			*expanded;
-	struct style_ranges	 ranges;
-};
 struct status_line {
 	struct event		 timer;
 
@@ -1892,7 +1937,7 @@ struct status_line {
 	int			 references;
 
 	struct grid_cell	 style;
-	struct status_line_entry entries[STATUS_LINES_LIMIT];
+	struct style_line_entry entries[STATUS_LINES_LIMIT];
 };
 
 /* Prompt type. */
@@ -1957,6 +2002,7 @@ typedef void (*overlay_resize_cb)(struct client *, void *);
 struct client {
 	const char		*name;
 	struct tmuxpeer		*peer;
+	const char		*user;
 	struct cmdq_list	*queue;
 
 	struct client_windows	 windows;
@@ -1997,7 +2043,7 @@ struct client {
 	struct event		 repeat_timer;
 
 	struct event		 click_timer;
-	int			 click_where;
+	int			 click_loc;
 	int			 click_wp;
 	u_int			 click_button;
 	struct mouse_event	 click_event;
@@ -2110,6 +2156,7 @@ struct client {
 #define PROMPT_ACCEPT 0x20
 #define PROMPT_QUOTENEXT 0x40
 #define PROMPT_BSPACE_EXIT 0x80
+#define PROMPT_NOFREEZE 0x100
 	int			 prompt_flags;
 	enum prompt_type	 prompt_type;
 	int			 prompt_cursor;
@@ -3081,9 +3128,9 @@ void	 input_free(struct input_ctx *);
 void	 input_reset(struct input_ctx *, int);
 struct evbuffer *input_pending(struct input_ctx *);
 void	 input_parse_pane(struct window_pane *);
-void	 input_parse_buffer(struct window_pane *, u_char *, size_t);
+void	 input_parse_buffer(struct window_pane *, const u_char *, size_t);
 void	 input_parse_screen(struct input_ctx *, struct screen *,
-	     screen_write_init_ctx_cb, void *, u_char *, size_t);
+	     screen_write_init_ctx_cb, void *, const u_char *, size_t);
 void	 input_reply_clipboard(struct bufferevent *, const char *, size_t,
 	     const char *, char);
 void	 input_set_buffer_size(size_t);
@@ -3296,6 +3343,7 @@ int	 screen_set_title(struct screen *, const char *);
 void	 screen_set_path(struct screen *, const char *);
 void	 screen_push_title(struct screen *);
 void	 screen_pop_title(struct screen *);
+void	 screen_set_progress_bar(struct screen *, enum progress_bar_state, int);
 void	 screen_resize(struct screen *, u_int, u_int, int);
 void	 screen_resize_cursor(struct screen *, u_int, u_int, int, int, int);
 void	 screen_set_selection(struct screen *, u_int, u_int, u_int, u_int,
@@ -3308,7 +3356,7 @@ int	 screen_select_cell(struct screen *, struct grid_cell *,
 void	 screen_alternate_on(struct screen *, struct grid_cell *, int);
 void	 screen_alternate_off(struct screen *, struct grid_cell *, int);
 const char *screen_mode_to_string(int);
-const char *screen_print(struct screen *);
+const char *screen_print(struct screen *, int);
 
 /* window.c */
 extern struct windows windows;
@@ -3385,6 +3433,7 @@ int		 window_pane_exited(struct window_pane *);
 u_int		 window_pane_search(struct window_pane *, const char *, int,
 		     int);
 const char	*window_printable_flags(struct winlink *, int);
+const char      *window_pane_printable_flags(struct window_pane *);
 struct window_pane *window_pane_find_up(struct window_pane *);
 struct window_pane *window_pane_find_down(struct window_pane *);
 struct window_pane *window_pane_find_left(struct window_pane *);
@@ -3415,6 +3464,8 @@ int		 window_pane_get_bg_control_client(struct window_pane *);
 int		 window_get_bg_client(struct window_pane *);
 enum client_theme window_pane_get_theme(struct window_pane *);
 void		 window_pane_send_theme_update(struct window_pane *);
+struct style_range *window_pane_border_status_get_range(struct window_pane *,
+			u_int, u_int);
 
 /* layout.c */
 u_int		 layout_count_cells(struct layout_cell *);
@@ -3450,7 +3501,7 @@ int		 layout_spread_cell(struct window *, struct layout_cell *);
 void		 layout_spread_out(struct window_pane *);
 
 /* layout-custom.c */
-char		*layout_dump(struct layout_cell *);
+char		*layout_dump(struct window *, struct layout_cell *);
 int		 layout_parse(struct window *, const char *, char **);
 
 /* layout-set.c */
@@ -3471,6 +3522,7 @@ typedef key_code (*mode_tree_key_cb)(void *, void *, u_int);
 typedef int (*mode_tree_swap_cb)(void *, void *, struct sort_criteria *);
 typedef void (*mode_tree_sort_cb)(struct sort_criteria *);
 typedef void (*mode_tree_each_cb)(void *, void *, struct client *, key_code);
+typedef const char** (*mode_tree_help_cb)(u_int *, const char**);
 u_int	 mode_tree_count_tagged(struct mode_tree_data *);
 void	*mode_tree_get_current(struct mode_tree_data *);
 const char *mode_tree_get_current_name(struct mode_tree_data *);
@@ -3485,7 +3537,7 @@ int	 mode_tree_down(struct mode_tree_data *, int);
 struct mode_tree_data *mode_tree_start(struct window_pane *, struct args *,
 	     mode_tree_build_cb, mode_tree_draw_cb, mode_tree_search_cb,
 	     mode_tree_menu_cb, mode_tree_height_cb, mode_tree_key_cb,
-	     mode_tree_swap_cb, mode_tree_sort_cb, void *, 
+             mode_tree_swap_cb, mode_tree_sort_cb, mode_tree_help_cb, void *,
 	     const struct menu_item *, struct screen **);
 void	 mode_tree_zoom(struct mode_tree_data *, struct args *);
 void	 mode_tree_build(struct mode_tree_data *);
@@ -3704,6 +3756,7 @@ int		 menu_key_cb(struct client *, void *, struct key_event *);
 #define POPUP_CLOSEEXITZERO 0x2
 #define POPUP_INTERNAL 0x4
 #define POPUP_CLOSEANYKEY 0x8
+#define POPUP_NOJOB 0x10
 typedef void (*popup_close_cb)(int, void *);
 typedef void (*popup_finish_edit_cb)(char *, size_t, void *);
 int		 popup_display(int, enum box_lines, struct cmdq_item *, u_int,
@@ -3711,6 +3764,7 @@ int		 popup_display(int, enum box_lines, struct cmdq_item *, u_int,
                     char **, const char *, const char *, struct client *,
                     struct session *, const char *, const char *,
                     popup_close_cb, void *);
+void		 popup_write(struct client *, const char *, size_t);
 int		 popup_editor(struct client *, const char *, size_t,
 		    popup_finish_edit_cb, void *);
 int		 popup_present(struct client *);
@@ -3729,6 +3783,9 @@ void		 style_set(struct style *, const struct grid_cell *);
 void		 style_copy(struct style *, struct style *);
 void		 style_set_scrollbar_style_from_option(struct style *,
 		     struct options *);
+void		 style_ranges_init(struct style_ranges *);
+void		 style_ranges_free(struct style_ranges *);
+struct style_range *style_ranges_get_range(struct style_ranges *, u_int);
 
 /* spawn.c */
 struct winlink	*spawn_window(struct spawn_context *, char **);

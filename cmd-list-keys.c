@@ -93,7 +93,7 @@ cmd_list_keys_get_table_width(struct key_binding **l, u_int n)
 }
 
 static struct key_binding **
-cmd_get_root_and_prefix(u_int *n, struct sort_criteria *sort_crit)
+cmd_list_keys_get_root_and_prefix(u_int *n, struct sort_criteria *sort_crit)
 {
 	const char			 *tables[] = { "prefix", "root" };
 	struct key_table		 *t;
@@ -119,7 +119,7 @@ cmd_get_root_and_prefix(u_int *n, struct sort_criteria *sort_crit)
 }
 
 static void
-cmd_filter_key_list(int filter_notes, int filter_key, key_code only,
+cmd_list_keys_filter_key_list(int filter_notes, int filter_key, key_code only,
     struct key_binding **l, u_int *n)
 {
 	key_code	key;
@@ -137,10 +137,10 @@ cmd_filter_key_list(int filter_notes, int filter_key, key_code only,
 }
 
 static void
-cmd_format_add_key_binding(struct format_tree *ft,
+cmd_list_keys_format_add_key_binding(struct format_tree *ft,
     const struct key_binding *bd, const char *prefix)
 {
-	const char	*s;
+	char	*s;
 
 	if (bd->flags & KEY_BINDING_REPEAT)
 		format_add(ft, "key_repeat", "1");
@@ -155,12 +155,12 @@ cmd_format_add_key_binding(struct format_tree *ft,
 	format_add(ft, "key_prefix", "%s", prefix);
 	format_add(ft, "key_table", "%s", bd->tablename);
 
-	s = key_string_lookup_key(bd->key, 0);
-	format_add(ft, "key_string", "%s", s);
+	format_add(ft, "key_string", "%s", key_string_lookup_key(bd->key, 0));
 
-	s = cmd_list_print(bd->cmdlist,
-	    CMD_LIST_PRINT_ESCAPED|CMD_LIST_PRINT_NO_GROUPS);
+	s = cmd_list_print(bd->cmdlist, CMD_LIST_PRINT_ESCAPED|
+	    CMD_LIST_PRINT_NO_GROUPS);
 	format_add(ft, "key_command", "%s", s);
+	free(s);
 }
 
 static enum cmd_retval
@@ -195,10 +195,6 @@ cmd_list_keys_exec(struct cmd *self, struct cmdq_item *item)
 	}
 	sort_crit.reversed = args_has(args, 'r');
 
-	prefix = cmd_list_keys_get_prefix(args);
-	single = args_has(args, '1');
-	notes_only = args_has(args, 'N');
-
 	if ((tablename = args_get(args, 'T')) != NULL) {
 		table = key_bindings_get_table(tablename, 0);
 		if (table == NULL) {
@@ -207,20 +203,26 @@ cmd_list_keys_exec(struct cmd *self, struct cmdq_item *item)
 		}
 	}
 
+	prefix = cmd_list_keys_get_prefix(args);
+	single = args_has(args, '1');
+	notes_only = args_has(args, 'N');
+
 	if ((template = args_get(args, 'F')) == NULL)
 		template = LIST_KEYS_TEMPLATE;
 
 	if (table)
 		l = sort_get_key_bindings_table(table, &n, &sort_crit);
 	else if (notes_only)
-		l = cmd_get_root_and_prefix(&n, &sort_crit);
+		l = cmd_list_keys_get_root_and_prefix(&n, &sort_crit);
 	else
 		l = sort_get_key_bindings(&n, &sort_crit);
 
 	filter_notes = notes_only && !args_has(args, 'a');
 	filter_key = only != KEYC_UNKNOWN;
-	if (filter_notes || filter_key)
-		cmd_filter_key_list(filter_notes, filter_key, only, l, &n);
+	if (filter_notes || filter_key) {
+		cmd_list_keys_filter_key_list(filter_notes, filter_key, only, l,
+		    &n);
+	}
 	if (single)
 		n = 1;
 
@@ -232,7 +234,7 @@ cmd_list_keys_exec(struct cmd *self, struct cmdq_item *item)
 	format_add(ft, "key_table_width", "%u",
 	    cmd_list_keys_get_table_width(l, n));
 	for (i = 0; i < n; i++) {
-		cmd_format_add_key_binding(ft, l[i], prefix);
+		cmd_list_keys_format_add_key_binding(ft, l[i], prefix);
 
 		line = format_expand(ft, template);
 		if ((single && tc != NULL) || n == 1)
