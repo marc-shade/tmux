@@ -903,8 +903,9 @@ mcp_tool_create_agent_session(const char *args)
 
 	/* Check if session already exists. */
 	if (session_find(name) != NULL) {
-		escaped_name = json_escape_server(name);
 		char	*r;
+
+		escaped_name = json_escape_server(name);
 		xasprintf(&r,
 		    "{\"error\":\"session '%s' already exists\"}", escaped_name);
 		free(escaped_name);

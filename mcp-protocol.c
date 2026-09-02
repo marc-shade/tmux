@@ -26,6 +26,7 @@
 
 #include "tmux.h"
 #include "mcp-client.h"
+#include "mcp-protocol.h"
 
 /*
  * MCP Protocol Extensions

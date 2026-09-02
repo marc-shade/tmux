@@ -51,7 +51,6 @@ cmd_mcp_stats_show_server(struct cmdq_item *item, struct mcp_connection *conn,
 	const char	*state_str, *transport_str;
 	u_int		total_requests, success_rate;
 	char		uptime_str[64], activity_str[64];
-	struct mcp_socket_conn *sock;
 
 	if (conn == NULL || conn->config == NULL)
 		return;

@@ -139,10 +139,12 @@ mcp_async_init(struct mcp_async_context *ctx)
 
 		for (int i = 0; i < ctx->num_read_events; i++) {
 			struct mcp_connection *conn = ctx->client->connections[i];
+			int fd;
+
 			if (conn == NULL)
 				continue;
 
-			int fd = (conn->config->transport == MCP_TRANSPORT_SOCKET) ?
+			fd = (conn->config->transport == MCP_TRANSPORT_SOCKET) ?
 			    conn->socket_fd : conn->stdout_fd;
 
 			if (fd < 0)
@@ -316,6 +318,7 @@ int
 mcp_async_process_queue(struct mcp_async_context *ctx)
 {
 	struct mcp_async_request *req;
+	struct timeval tv;
 	int processed = 0;
 
 	if (ctx == NULL)
@@ -379,7 +382,6 @@ mcp_async_process_queue(struct mcp_async_context *ctx)
 		ctx->server_active[server_idx]++;
 
 		/* Set up timeout */
-		struct timeval tv;
 		tv.tv_sec = req->timeout_ms / 1000;
 		tv.tv_usec = (req->timeout_ms % 1000) * 1000;
 
@@ -418,7 +420,7 @@ void
 mcp_async_read_callback(evutil_socket_t fd, short what, void *arg)
 {
 	struct mcp_connection *conn = arg;
-	struct mcp_async_request *req;
+	struct mcp_response *resp;
 	char buffer[MCP_MAX_MESSAGE_SIZE];
 	ssize_t n;
 
@@ -436,7 +438,7 @@ mcp_async_read_callback(evutil_socket_t fd, short what, void *arg)
 	buffer[n] = '\0';
 
 	/* Parse response */
-	struct mcp_response *resp = mcp_parse_response(buffer);
+	resp = mcp_parse_response(buffer);
 	if (resp == NULL)
 		return;
 
@@ -447,6 +449,7 @@ mcp_async_read_callback(evutil_socket_t fd, short what, void *arg)
 	/* Signal completion */
 	/* This is a simplified implementation */
 	/* Full implementation would match request_id and complete specific request */
+	mcp_response_free(resp);
 }
 
 /* Cancel async request */
@@ -499,6 +502,8 @@ void
 mcp_async_get_stats(struct mcp_async_context *ctx, u_int *queued,
     u_int *active, u_int *completed, u_int *failed)
 {
+	struct mcp_async_request *req;
+
 	if (ctx == NULL)
 		return;
 
@@ -506,7 +511,6 @@ mcp_async_get_stats(struct mcp_async_context *ctx, u_int *queued,
 		*queued = ctx->total_queued;
 	if (active != NULL) {
 		*active = 0;
-		struct mcp_async_request *req;
 		TAILQ_FOREACH(req, &ctx->active_queue, entry)
 			(*active)++;
 	}

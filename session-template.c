@@ -113,59 +113,6 @@ session_template_destroy(struct session_template *tmpl)
 }
 
 /*
- * Add a window to template
- */
-static int
-session_template_add_window(struct session_template *tmpl, const char *name,
-    const char *command)
-{
-	struct template_window	*window;
-
-	if (tmpl->window_count >= tmpl->max_windows)
-		return (-1);
-
-	window = &tmpl->windows[tmpl->window_count++];
-	strlcpy(window->name, name, sizeof(window->name));
-	strlcpy(window->command, command != NULL ? command : "bash",
-	    sizeof(window->command));
-	window->split_horizontal = 0;
-	window->split_vertical = 0;
-
-	return (0);
-}
-
-/*
- * Add an MCP server to template
- */
-static int
-session_template_add_mcp(struct session_template *tmpl, const char *server)
-{
-	if (tmpl->mcp_server_count >= tmpl->max_mcp_servers)
-		return (-1);
-
-	tmpl->mcp_servers[tmpl->mcp_server_count++] = xstrdup(server);
-	return (0);
-}
-
-/*
- * Add a template variable
- */
-static int
-session_template_add_var(struct session_template *tmpl, const char *name,
-    const char *default_value)
-{
-	if (tmpl->var_count >= tmpl->max_vars)
-		return (-1);
-
-	tmpl->var_names[tmpl->var_count] = xstrdup(name);
-	tmpl->var_defaults[tmpl->var_count] = xstrdup(default_value != NULL ?
-	    default_value : "");
-	tmpl->var_count++;
-
-	return (0);
-}
-
-/*
  * Substitute template variables in a string
  * Format: {{VARNAME}} replaced with value from params
  */

@@ -243,7 +243,6 @@ mcp_pool_release(struct mcp_pool *pool, struct mcp_connection *conn)
 	struct mcp_server_pool	*server_pool;
 	struct mcp_pool_entry	*entry;
 	const char		*server_name;
-	u_int			 i;
 
 	if (pool == NULL || conn == NULL || conn->config == NULL)
 		return;

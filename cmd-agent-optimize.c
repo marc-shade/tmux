@@ -56,6 +56,8 @@ cmd_agent_optimize_exec(struct cmd *self, struct cmdq_item *item)
 	const char			*agent_type, *strategy_str;
 	enum optimization_strategy	 strategy;
 	struct agent_learning		*learning;
+	struct session_agent		 fake_agent;
+	char				*recommendations;
 
 	/* Get agent type */
 	agent_type = args_get(args, 't');
@@ -99,7 +101,6 @@ cmd_agent_optimize_exec(struct cmd *self, struct cmdq_item *item)
 	cmdq_print(item, "");
 
 	/* Generate optimization for fake session agent */
-	struct session_agent fake_agent;
 	memset(&fake_agent, 0, sizeof fake_agent);
 	fake_agent.agent_type = xstrdup(agent_type);
 	fake_agent.session_name = xstrdup("optimization");
@@ -123,7 +124,7 @@ cmd_agent_optimize_exec(struct cmd *self, struct cmdq_item *item)
 	cmdq_print(item, "%s", result->recommendations);
 
 	/* Display learning recommendations */
-	char *recommendations = agent_learning_recommend_improvements(agent_type);
+	recommendations = agent_learning_recommend_improvements(agent_type);
 	if (recommendations != NULL) {
 		cmdq_print(item, "");
 		cmdq_print(item, "%s", recommendations);

@@ -37,8 +37,6 @@ static int			 type_count = 0;
 /* Time-series data */
 #define MAX_DATAPOINTS 1440  /* 24 hours at 1-minute intervals */
 static struct analytics_datapoint datapoints[MAX_DATAPOINTS];
-static int			 datapoint_count = 0;
-static int			 datapoint_index = 0;
 
 /* Active session tracking */
 struct active_session_record {
