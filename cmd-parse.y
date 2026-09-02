@@ -1,4 +1,4 @@
-/* $OpenBSD$ */
+/* $OpenBSD: cmd-parse.y,v 1.59 2026/08/31 07:51:56 nicm Exp $ */
 
 /*
  * Copyright (c) 2019 Nicholas Marriott <nicholas.marriott@gmail.com>
@@ -36,6 +36,8 @@ static void printflike(1,2)	 yyerror(const char *, ...);
 
 static char			*yylex_token(int);
 static char			*yylex_format(void);
+
+#define CMD_PARSE_MAX_ENVIRON_LEN 16384
 
 struct cmd_parse_scope {
 	int				 flag;
@@ -232,6 +234,10 @@ assignment	: EQUALS
 					flag = flag && scope->flag;
 			}
 
+			if (strlen($1) > CMD_PARSE_MAX_ENVIRON_LEN) {
+				yyerror("environment variable is too long");
+				YYABORT;
+			}
 			if ((~flags & CMD_PARSE_PARSEONLY) && flag)
 				environ_put(global_environ, $1, 0);
 			free($1);
@@ -250,6 +256,10 @@ hidden_assignment : HIDDEN EQUALS
 					flag = flag && scope->flag;
 			}
 
+			if (strlen($2) > CMD_PARSE_MAX_ENVIRON_LEN) {
+				yyerror("environment variable is too long");
+				YYABORT;
+			}
 			if ((~flags & CMD_PARSE_PARSEONLY) && flag)
 				environ_put(global_environ, $2, ENVIRON_HIDDEN);
 			free($2);
@@ -792,6 +802,7 @@ cmd_parse_expand_alias(struct cmd_parse_command *cmd,
 	if (last == NULL) {
 		pr->status = CMD_PARSE_SUCCESS;
 		pr->cmdlist = cmd_list_new();
+		cmd_parse_free_commands(cmds);
 		return (1);
 	}
 
@@ -804,6 +815,7 @@ cmd_parse_expand_alias(struct cmd_parse_command *cmd,
 	pi->flags |= CMD_PARSE_NOALIAS;
 	cmd_parse_build_commands(cmds, pi, pr);
 	pi->flags &= ~CMD_PARSE_NOALIAS;
+	cmd_parse_free_commands(cmds);
 	return (1);
 }
 

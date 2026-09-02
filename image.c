@@ -53,14 +53,12 @@ image_log(struct image *im, const char* from, const char* fmt, ...)
 static void
 image_free(struct image *im)
 {
-	struct screen	*s = im->s;
-
 	image_log(im, __func__, NULL);
 
 	TAILQ_REMOVE(&all_images, im, all_entry);
 	all_images_count--;
 
-	TAILQ_REMOVE(&s->images, im, entry);
+	TAILQ_REMOVE(im->list, im, entry);
 	sixel_free(im->data);
 	free(im->fallback);
 	free(im);
@@ -85,6 +83,11 @@ image_fallback(char **ret, u_int sx, u_int sy)
 {
 	char	*buf, *label;
 	u_int	 py, size, lsize;
+
+	if (sy == 0) {
+		*ret = xstrdup("");
+		return;
+	}
 
 	/* Allocate first line. */
 	lsize = xasprintf(&label, "SIXEL IMAGE (%ux%u)\r\n", sx, sy) + 1;
@@ -137,7 +140,8 @@ image_store(struct screen *s, struct sixel_image *si)
 	image_fallback(&im->fallback, im->sx, im->sy);
 
 	image_log(im, __func__, NULL);
-	TAILQ_INSERT_TAIL(&s->images, im, entry);
+	im->list = &s->images;
+	TAILQ_INSERT_TAIL(im->list, im, entry);
 
 	TAILQ_INSERT_TAIL(&all_images, im, all_entry);
 	if (++all_images_count == MAX_IMAGE_COUNT)

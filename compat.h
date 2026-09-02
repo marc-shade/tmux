@@ -410,11 +410,6 @@ int		 asprintf(char **, const char *, ...);
 int		 vasprintf(char **, const char *, va_list);
 #endif
 
-#ifndef HAVE_FGETLN
-/* fgetln.c */
-char		*fgetln(FILE *, size_t *);
-#endif
-
 #ifndef HAVE_GETLINE
 /* getline.c */
 ssize_t		 getline(char **, size_t *, FILE *);
@@ -463,6 +458,9 @@ int		 utf8proc_wctomb(char *, wchar_t);
 #ifdef NEED_FUZZING
 /* tmux.c */
 #define main __weak main
+#define regcomp(preg, pattern, cflags) (0)
+#define regexec(preg, string, nmatch, pmatch, eflags) (REG_NOMATCH)
+#define regfree(preg) ((void)0)
 #endif
 
 /* getopt.c */
