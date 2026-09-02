@@ -45,7 +45,7 @@ const struct cmd_entry cmd_mcp_serve_entry = {
 	.args = { "", 0, 0, NULL },
 	.usage = "",
 
-	.flags = CMD_STARTSERVER,
+	.flags = CMD_STARTSERVER|CMD_EXTENSION,
 	.exec = cmd_mcp_serve_exec
 };
 

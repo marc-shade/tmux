@@ -39,7 +39,7 @@ const struct cmd_entry cmd_show_agent_entry = {
 
 	.target = { 't', CMD_FIND_SESSION, 0 },
 
-	.flags = 0,
+	.flags = CMD_EXTENSION,
 	.exec = cmd_show_agent_exec
 };
 

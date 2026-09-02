@@ -48,7 +48,7 @@ const struct cmd_entry cmd_agent_dashboard_entry = {
 	.args = { "s", 0, 0, NULL },
 	.usage = "[-s]",
 
-	.flags = CMD_AFTERHOOK,
+	.flags = CMD_AFTERHOOK|CMD_EXTENSION,
 	.exec = cmd_agent_dashboard_exec
 };
 

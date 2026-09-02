@@ -36,7 +36,7 @@ const struct cmd_entry cmd_mcp_query_entry = {
 	.args = { "", 2, 3, NULL },
 	.usage = "server tool [arguments]",
 
-	.flags = 0,
+	.flags = CMD_EXTENSION,
 	.exec = cmd_mcp_query_exec
 };
 

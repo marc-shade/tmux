@@ -37,7 +37,7 @@ const struct cmd_entry cmd_new_from_template_entry = {
 	.args = { "g:s:t:", 0, 0, NULL },
 	.usage = "[-g goal] [-s session-name] -t template-name",
 
-	.flags = 0,
+	.flags = CMD_EXTENSION,
 	.exec = cmd_new_from_template_exec
 };
 

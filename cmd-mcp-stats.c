@@ -39,7 +39,7 @@ const struct cmd_entry cmd_mcp_stats_entry = {
 	.args = { "", 0, 1, NULL },
 	.usage = "[server-name]",
 
-	.flags = 0,
+	.flags = CMD_EXTENSION,
 	.exec = cmd_mcp_stats_exec
 };
 

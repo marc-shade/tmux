@@ -2069,6 +2069,8 @@ struct cmd_entry {
 #define CMD_CLIENT_CFLAG 0x8
 #define CMD_CLIENT_TFLAG 0x10
 #define CMD_CLIENT_CANFAIL 0x20
+#define CMD_EXTENSION 0x40	/* agentic fork command: must never win a
+				 * prefix tie against a stock command */
 	int		 flags;
 
 	enum cmd_retval	 (*exec)(struct cmd *, struct cmdq_item *);

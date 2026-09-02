@@ -37,7 +37,7 @@ const struct cmd_entry cmd_agent_analytics_entry = {
 	.args = { "st:", 0, 0, NULL },
 	.usage = "[-s] [-t agent-type]",
 
-	.flags = 0,
+	.flags = CMD_EXTENSION,
 	.exec = cmd_agent_analytics_exec
 };
 

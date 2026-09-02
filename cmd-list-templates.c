@@ -37,7 +37,7 @@ const struct cmd_entry cmd_list_templates_entry = {
 	.args = { "", 0, 0, NULL },
 	.usage = "",
 
-	.flags = 0,
+	.flags = CMD_EXTENSION,
 	.exec = cmd_list_templates_exec
 };
 

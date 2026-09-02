@@ -39,7 +39,7 @@ const struct cmd_entry cmd_list_agent_groups_entry = {
 
 	.target = { 0, 0, 0 },
 
-	.flags = 0,
+	.flags = CMD_EXTENSION,
 	.exec = cmd_list_agent_groups_exec
 };
 

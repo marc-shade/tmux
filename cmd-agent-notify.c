@@ -45,7 +45,7 @@ const struct cmd_entry cmd_agent_notify_entry = {
 
 	.target = { 't', CMD_FIND_SESSION, CMD_FIND_QUIET },
 
-	.flags = CMD_AFTERHOOK,
+	.flags = CMD_AFTERHOOK|CMD_EXTENSION,
 	.exec = cmd_agent_notify_exec
 };
 

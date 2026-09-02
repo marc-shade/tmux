@@ -488,18 +488,18 @@ cmd_get_alias(const char *name)
 }
 
 /* Look up a command entry by name. */
-const struct cmd_entry *
-cmd_find(const char *name, char **cause)
+static const struct cmd_entry *
+cmd_find_pass(const char *name, int skip_extensions, int *ambiguous)
 {
 	const struct cmd_entry	**loop, *entry, *found = NULL;
-	int			  ambiguous;
-	char			  s[8192];
 
-	ambiguous = 0;
+	*ambiguous = 0;
 	for (loop = cmd_table; *loop != NULL; loop++) {
 		entry = *loop;
+		if (skip_extensions && (entry->flags & CMD_EXTENSION))
+			continue;
 		if (entry->alias != NULL && strcmp(entry->alias, name) == 0) {
-			ambiguous = 0;
+			*ambiguous = 0;
 			found = entry;
 			break;
 		}
@@ -507,12 +507,33 @@ cmd_find(const char *name, char **cause)
 		if (strncmp(entry->name, name, strlen(name)) != 0)
 			continue;
 		if (found != NULL)
-			ambiguous = 1;
+			*ambiguous = 1;
 		found = entry;
 
-		if (strcmp(entry->name, name) == 0)
+		if (strcmp(entry->name, name) == 0) {
+			*ambiguous = 0;
 			break;
+		}
 	}
+	return (found);
+}
+
+const struct cmd_entry *
+cmd_find(const char *name, char **cause)
+{
+	const struct cmd_entry	**loop, *entry, *found;
+	int			  ambiguous;
+	char			  s[8192];
+
+	/*
+	 * Stock commands are matched first so that an agentic extension can
+	 * never make a previously unambiguous abbreviation (such as "a" for
+	 * attach-session) ambiguous. Extensions are only considered when the
+	 * name matches no stock command at all.
+	 */
+	found = cmd_find_pass(name, 1, &ambiguous);
+	if (found == NULL && !ambiguous)
+		found = cmd_find_pass(name, 0, &ambiguous);
 	if (ambiguous)
 		goto ambiguous;
 	if (found == NULL) {
