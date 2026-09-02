@@ -1,6 +1,6 @@
 # tmux - Terminal Multiplexer with Agentic AI Integration
 
-[![Version](https://img.shields.io/badge/version-next--3.7-blue.svg)](https://github.com/marc-shade/tmux)
+[![Version](https://img.shields.io/badge/version-next--3.8-blue.svg)](https://github.com/marc-shade/tmux)
 [![License](https://img.shields.io/badge/license-ISC-green.svg)](COPYING)
 [![Build Status](https://img.shields.io/badge/build-passing-success.svg)]()
 [![Phase](https://img.shields.io/badge/phase-5.0%20complete-brightgreen.svg)](AGENTIC_FEATURES.md)
@@ -102,7 +102,7 @@ sudo make install
 
 ```bash
 tmux -V
-# Should show: tmux next-3.7
+# Should show: tmux next-3.8
 
 tmux list-commands | grep -E "(agent|mcp|template)"
 # Should show 15 agentic commands
